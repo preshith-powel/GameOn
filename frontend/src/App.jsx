@@ -1,176 +1,30 @@
+// frontend/src/App.jsx - FULL CODE WITH UNIQUE ID LOGIN AND WELCOME MESSAGE
+
 import React, { useState } from 'react';
+import axios from 'axios';
+import './App.css';
+import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
 
-const containerStyles = {
-  fontFamily: 'Inter, sans-serif',
-  backgroundColor: '#0a0a0a',
-  color: '#e0e0e0',
-  display: 'flex',
-  justifyContent: 'center',
-  alignItems: 'center',
-  height: '100vh',
-  margin: 0,
-};
+// Import all required pages/components
+import AdminDashboard from './pages/AdminDashboard';
+import ManagerDashboard from './pages/ManagerDashboard'; 
+// Placeholder for other Dashboards
+const CoordinatorDashboard = () => <div className="container" style={{padding: '20px', color: '#fff'}}><h1>Coordinator Dashboard</h1></div>;
+const SpectatorDashboard = () => <div className="container" style={{padding: '20px', color: '#fff'}}><h1>Spectator Dashboard (Public View)</h1></div>;
 
-const outerCardStyles = {
-  display: 'flex',
-  backgroundColor: '#1a1a1a',
-  borderRadius: '20px',
-  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.5)',
-  overflow: 'hidden',
-  width: '1000px',
-  height: '750px',
-};
 
-const welcomePanelStyles = {
-  backgroundColor: '#2c2c2c',
-  width: '50%',
-  padding: '40px',
-  display: 'flex',
-  flexDirection: 'column',
-  justifyContent: 'center',
-  alignItems: 'center',
-  position: 'relative',
-};
-
-const logoStyles = {
-  position: 'absolute',
-  top: '20px',
-  left: '20px',
-  width: '60px',
-  height: '60px',
-};
-
-const welcomeTitleStyles = {
-  color: '#e0e0e0',
-  fontSize: '4em',
-  fontWeight: 'bold',
-  marginTop: '20px',
-  marginBottom: '5px',
-};
-
-const taglineStyles = {
-  color: '#a0a0a0',
-  fontSize: '1.2em',
-  marginTop: '0',
-  marginBottom: '40px',
-  textAlign: 'center',
-};
-
-const quoteBoxStyles = {
-  backgroundColor: '#333',
-  padding: '25px',
-  borderRadius: '15px',
-  textAlign: 'center',
-  fontStyle: 'italic',
-  color: '#a0a0a0',
-  lineHeight: '1.5',
-};
-
-const loginFormContainerStyles = {
-  width: '50%',
-  padding: '30px',
-  display: 'flex',
-  flexDirection: 'column',
-  justifyContent: 'center',
-  alignItems: 'center',
-};
-
-const formTitleStyles = {
-  color: '#00ffaa',
-  fontSize: '2.5em',
-  fontWeight: 'bold',
-  marginBottom: '5px',
-  textAlign: 'center',
-};
-
-const formSubtitleStyles = {
-  color: '#a0a0a0',
-  fontSize: '1em',
-  marginTop: 0,
-  marginBottom: '20px',
-  textAlign: 'center',
-};
-
-const inputGroupStyles = {
-  textAlign: 'left',
-  marginBottom: '15px',
-};
-
-const labelStyles = {
-  display: 'block',
-  marginBottom: '8px',
-  fontWeight: 'bold',
-  color: '#e0e0e0',
-};
-
-const inputStyles = {
-  width: '100%',
-  padding: '12px',
-  border: '1px solid #333',
-  borderRadius: '8px',
-  backgroundColor: '#2c2c2c',
-  color: '#e0e0e0',
-  boxSizing: 'border-box',
-  fontSize: '1em',
-};
-
-const selectStyles = {
-  ...inputStyles,
-  appearance: 'none',
-  backgroundImage: 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'white\'><path d=\'M7 10l5 5 5-5z\'/></svg>")',
-  backgroundRepeat: 'no-repeat',
-  backgroundPosition: 'right 12px center',
-  backgroundSize: '15px',
-  cursor: 'pointer',
-};
-
-const buttonStyles = {
-  width: '100%',
-  padding: '15px',
-  border: 'none',
-  borderRadius: '8px',
-  backgroundColor: '#00ffaa',
-  color: '#1a1a1a',
-  fontSize: '1.2em',
-  fontWeight: 'bold',
-  cursor: 'pointer',
-  transition: 'background-color 0.3s ease',
-  marginTop: '20px',
-};
-
-const signLinkTextStyles = {
-  marginTop: '20px',
-  fontSize: '0.9em',
-  color: '#a0a0a0',
-  textAlign: 'center',
-};
-
-const signLinkStyles = {
-  color: '#00ffaa',
-  textDecoration: 'none',
-  fontWeight: 'bold',
-  cursor: 'pointer',
-  transition: 'color 0.3s ease',
-};
-
-const errorMessageStyles = {
-  color: '#ff6b6b',
-  fontSize: '0.85em',
-  marginTop: '5px',
-  textAlign: 'center',
-};
-
-function App() {
+// The entire Login/Registration logic is kept here for simplicity
+const LoginPage = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [regRole, setRegRole] = useState('admin');
   const [regId, setRegId] = useState('');
   const [regError, setRegError] = useState('');
 
-  // Simulating a database check for unique IDs
-  const existingIds = ['A1234', 'C5678', 'M9012', 'S3456'];
+  const navigate = useNavigate(); 
 
   const toggleForm = () => {
     setIsLogin(!isLogin);
+    setRegError('');
   };
 
   const getPlaceholder = (role) => {
@@ -184,48 +38,100 @@ function App() {
     return regex.test(id);
   };
 
-  const handleRegistration = (e) => {
+  const handleRegistration = async (e) => {
     e.preventDefault();
-    setRegError(''); // Clear previous errors
-
+    setRegError('');
     const username = e.target['reg-username'].value;
+    const uniqueId = e.target['reg-id'].value;
     const password = e.target['reg-password'].value;
+    const role = e.target['reg-role'].value;
 
-    if (!username || !regId || !password) {
+    if (!username || !uniqueId || !password) {
       setRegError('Please fill in all fields.');
       return;
     }
-    
-    if (!validateId(regId, regRole)) {
-      setRegError(`ID must start with a '${regRole.charAt(0).toUpperCase()}' followed by 4 digits.`);
+
+    if (!validateId(uniqueId, role)) {
+      setRegError(`ID must start with a '${role.charAt(0).toUpperCase()}' followed by 4 digits.`);
       return;
     }
-    
-    if (existingIds.includes(regId)) {
-      setRegError('ID already exists, try another one');
-    } else {
-      // In a real application, you would send this data to a backend
-      console.log('Account created successfully:', {
-        username: username,
-        id: regId,
-        password: password,
-        role: regRole,
+
+    try {
+      const res = await axios.post('http://localhost:5000/api/auth/register', {
+        username,
+        uniqueId,
+        password,
+        role,
       });
-      // For this example, let's just switch back to the login form
+      console.log('Registration successful:', res.data);
+      alert('Registration successful! Please sign in.');
       toggleForm();
+    } catch (err) {
+      setRegError(err.response.data.msg || 'Registration failed. Please try again.');
+      console.error(err.response.data);
     }
   };
 
+  // UPDATED: handleLogin now uses Unique ID for login and shows a welcome message
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setRegError('');
+    // NOTE: The backend now expects the Unique ID in the 'username' field
+    const uniqueId = e.target['uniqueId'].value; 
+    const password = e.target['password'].value;
+    const role = e.target['role'].value; 
+
+    try {
+      const res = await axios.post('http://localhost:5000/api/auth/login', {
+        username: uniqueId, // Send Unique ID in the username field
+        password,
+      });
+      
+      const { token, user } = res.data;
+      
+      // Store the token and role for global use
+      localStorage.setItem('token', token);
+      localStorage.setItem('userRole', user.role); 
+      localStorage.setItem('username', user.username); // Store username for welcome message
+
+      // WELCOME MESSAGE: Uses the username retrieved from the backend
+      alert(`Welcome, ${user.username}! Logging in as ${user.role}.`);
+      
+      // Redirection logic
+      switch (user.role) {
+        case 'admin':
+          navigate('/admin-dashboard');
+          break;
+        case 'manager':
+          navigate('/manager-dashboard');
+          break;
+        case 'coordinator':
+          navigate('/coordinator-dashboard');
+          break;
+        case 'spectator':
+          navigate('/spectator-dashboard');
+          break;
+        default:
+          navigate('/');
+      }
+
+    } catch (err) {
+      setRegError(err.response.data.msg || 'Login failed. Invalid credentials.');
+      console.error(err.response.data);
+    }
+  };
+
+  // --- JSX RENDER ---
   return (
-    <div style={containerStyles}>
-      <div style={outerCardStyles}>
-        <div style={welcomePanelStyles}>
-          <img src="/logo.png" alt="GameON Logo" style={logoStyles} />
-          <h1 style={welcomeTitleStyles}>
-            GAME<span style={{ color: '#00ffaa' }}>ON</span>
+    <div className="container">
+      <div className="outer-card">
+        <div className="welcome-panel">
+          <img src="/logo.png" alt="GameON Logo" className="logo" />
+          <h1 className="welcome-title">
+            GAME<span>ON</span>
           </h1>
-          <p style={taglineStyles}>Smart Sports Tournament Management</p>
-          <div style={quoteBoxStyles}>
+          <p className="tagline">Smart Sports Tournament Management</p>
+          <div className="quote-box">
             <p>"Welcome to GameOn</p>
             <p>
               A smart and interactive platform designed to manage local sports tournaments with
@@ -235,67 +141,55 @@ function App() {
             </p>
           </div>
         </div>
-
-        <div style={loginFormContainerStyles}>
-          <h1 style={formTitleStyles}>{isLogin ? 'Welcome Back' : 'Create an Account'}</h1>
-          <p style={formSubtitleStyles}>{isLogin ? 'Sign into your account.' : 'Join the community'}</p>
-
+        <div className="login-form-container">
+          <h1 className="form-title">{isLogin ? 'Welcome Back' : 'Create an Account'}</h1>
+          <p className="form-subtitle">{isLogin ? 'Sign into your account.' : 'Join the community'}</p>
           {isLogin ? (
-            // Login Form
-            <form>
-              <div style={inputGroupStyles}>
-                <label htmlFor="username" style={labelStyles}>Username</label>
-                <input type="text" id="username" placeholder="Enter your username" style={inputStyles} />
+            <form onSubmit={handleLogin}>
+              <div className="input-group">
+                <label htmlFor="uniqueId">Unique ID (e.g., A1000)</label> {/* UPDATED LABEL */}
+                <input type="text" id="uniqueId" placeholder="Enter your Unique ID" /> {/* UPDATED ID */}
               </div>
-
-              <div style={inputGroupStyles}>
-                <label htmlFor="password" style={labelStyles}>Password</label>
-                <input type="password" id="password" placeholder="Enter your password" style={inputStyles} />
+              <div className="input-group">
+                <label htmlFor="password">Password</label>
+                <input type="password" id="password" placeholder="Enter your password" />
               </div>
-
-              <div style={inputGroupStyles}>
-                <label htmlFor="role" style={labelStyles}>Role</label>
-                <select id="role" style={selectStyles}>
+              <div className="input-group">
+                <label htmlFor="role">Role</label>
+                <select id="role">
                   <option value="admin">Admin</option>
                   <option value="coordinator">Coordinator</option>
                   <option value="manager">Manager</option>
                   <option value="spectator">Spectator</option>
                 </select>
               </div>
-
-              <button type="submit" style={buttonStyles}>Sign In</button>
+              {regError && <p className="error-message">{regError}</p>}
+              <button type="submit" className="button">Sign In</button>
             </form>
           ) : (
-            // Registration Form
             <form onSubmit={handleRegistration}>
-              <div style={inputGroupStyles}>
-                <label htmlFor="reg-username" style={labelStyles}>Username</label>
-                <input type="text" id="reg-username" placeholder="Choose a username" style={inputStyles} />
+              <div className="input-group">
+                <label htmlFor="reg-username">Username</label>
+                <input type="text" id="reg-username" placeholder="Choose a username" />
               </div>
-
-              <div style={inputGroupStyles}>
-                <label htmlFor="reg-id" style={labelStyles}>Unique ID</label>
+              <div className="input-group">
+                <label htmlFor="reg-id">Unique ID</label>
                 <input
                   type="text"
                   id="reg-id"
                   placeholder={getPlaceholder(regRole)}
-                  style={inputStyles}
                   value={regId}
                   onChange={(e) => setRegId(e.target.value)}
                 />
               </div>
-              {regError && <p style={errorMessageStyles}>{regError}</p>}
-
-              <div style={inputGroupStyles}>
-                <label htmlFor="reg-password" style={labelStyles}>Password</label>
-                <input type="password" id="reg-password" placeholder="Create a password" style={inputStyles} />
+              <div className="input-group">
+                <label htmlFor="reg-password">Password</label>
+                <input type="password" id="reg-password" placeholder="Create a password" />
               </div>
-
-              <div style={inputGroupStyles}>
-                <label htmlFor="reg-role" style={labelStyles}>Role</label>
+              <div className="input-group">
+                <label htmlFor="reg-role">Role</label>
                 <select
                   id="reg-role"
-                  style={selectStyles}
                   value={regRole}
                   onChange={(e) => setRegRole(e.target.value)}
                 >
@@ -305,20 +199,34 @@ function App() {
                   <option value="spectator">Spectator</option>
                 </select>
               </div>
-
-              <button type="submit" style={buttonStyles}>Create Account</button>
+              {regError && <p className="error-message">{regError}</p>}
+              <button type="submit" className="button">Create Account</button>
             </form>
           )}
-
-          <p style={signLinkTextStyles}>
+          <p className="sign-link-text">
             {isLogin ? 'New to GAME-ON?' : 'Already have an account?'}
-            <a onClick={toggleForm} style={signLinkStyles}>
+            <a onClick={toggleForm} className="sign-link">
               {isLogin ? ' Create Account' : ' Sign In'}
             </a>
           </p>
         </div>
       </div>
     </div>
+  );
+};
+
+// --- MAIN APP COMPONENT ---
+function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<LoginPage />} />
+        <Route path="/admin-dashboard" element={<AdminDashboard />} />
+        <Route path="/manager-dashboard" element={<ManagerDashboard />} />
+        <Route path="/coordinator-dashboard" element={<CoordinatorDashboard />} />
+        <Route path="/spectator-dashboard" element={<SpectatorDashboard />} />
+      </Routes>
+    </Router>
   );
 }
 
