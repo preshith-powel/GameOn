@@ -1,18 +1,15 @@
-// backend/middleware/auth.js
+// backend/middleware/auth.js - FULL UPDATED CODE (Final Auth Export Fix)
 
 const jwt = require('jsonwebtoken');
 
-// Middleware to protect routes and verify the JWT token
-exports.protect = (req, res, next) => {
-    // Get the token from the request header
+// Middleware 1: Protects the route and verifies the JWT token
+const protect = (req, res, next) => {
     const token = req.header('x-auth-token');
 
-    // Check if no token is provided
     if (!token) {
         return res.status(401).json({ msg: 'No token, authorization denied' });
     }
 
-    // Verify the token
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         req.user = decoded.user;
@@ -22,15 +19,23 @@ exports.protect = (req, res, next) => {
     }
 };
 
-// Middleware to check if the user is an admin
-exports.admin = (req, res, next) => {
-    // First, run the protect middleware to ensure the user is logged in
-    exports.protect(req, res, () => {
-        // Now, check if the user's role is 'admin'
-        if (req.user.role !== 'admin') {
-            return res.status(403).json({ msg: 'Access denied: You are not an admin' });
-        }
-        // If the user is an admin, proceed to the next middleware or route handler
-        next();
-    });
+// Middleware 2: Returns a function that checks for a specific role
+const checkRole = (roles) => (req, res, next) => {
+    if (typeof roles === 'string') {
+        roles = [roles];
+    }
+    
+    if (!req.user || !roles.includes(req.user.role)) {
+        return res.status(403).json({ 
+            msg: `Access denied: Role must be one of: ${roles.join(', ')}`
+        });
+    }
+    next();
+};
+
+// --- FINAL EXPORT: Stable definition of all middleware functions ---
+module.exports = {
+    protect,
+    checkRole,
+    admin: [protect, checkRole('admin')] 
 };

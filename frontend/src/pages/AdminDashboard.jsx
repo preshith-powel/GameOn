@@ -1,12 +1,20 @@
-// frontend/src/pages/AdminDashboard.jsx - FULL FINAL CODE (Single Column Layout)
+// frontend/src/pages/AdminDashboard.jsx - FULL UPDATED CODE (Final Cleanup: Remove ** and Add Status Color)
 
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 
 // --- Global Functions to get data from Local Storage ---
 const getAdminToken = () => localStorage.getItem('token'); 
 const LOGGED_IN_USERNAME = localStorage.getItem('username') || 'Admin'; 
+
+// Helper function to determine status color (Re-added here for ViewTournaments component)
+const getStatusColor = (status) => {
+    const s = status ? status.toLowerCase() : 'pending';
+    if (s === 'pending') return '#ff6b6b'; // Red for Pending
+    if (s === 'ongoing') return '#39ff14'; // Green for Active/Ongoing
+    return '#a0a0a0'; // Gray for completed or other
+};
 
 // --- STYLES (Finalized for Layout) ---
 const containerStyles = { padding: '20px', backgroundColor: '#0a0a0a', minHeight: '100vh', color: '#e0e0e0', position: 'relative' }; 
@@ -30,9 +38,10 @@ const headerWrapperStyles = { display: 'flex', justifyContent: 'space-between', 
 const logoutButtonStyles = { padding: '10px 15px', backgroundColor: '#00ffaa', color: '#1a1a1a', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', transition: 'background-color 0.2s' };
 
 // --- Styles for the new Participants Layout ---
-// REMOVED: participantGridStyles and swapArrowStyles
-const slotWrapperStyles = { display: 'flex', flexDirection: 'column', gap: '10px' }; // Renamed from participantColumnStyles
+const slotWrapperStyles = { display: 'flex', flexDirection: 'column', gap: '10px' }; 
 const slotItemStyles = { backgroundColor: '#2c2c2c', borderRadius: '5px', padding: '10px', display: 'flex', alignItems: 'center', gap: '10px' };
+const readySymbolStyles = { color: '#39ff14', fontSize: '1.2em', marginLeft: '10px' };
+const startTournamentButtonStyles = { ...submitButtonStyles, backgroundColor: '#00ffaa', color: '#1a1a1a', marginLeft: '20px' };
 
 
 // ##################################################################
@@ -46,7 +55,7 @@ const CreateTournamentForm = ({ setView, token }) => {
     const [formData, setFormData] = useState({
         name: '', sport: 'football', format: 'single elimination', 
         startDate: '', endDate: '',
-        datesRequired: true, 
+        datesRequired: false, 
         participantsType: 'teams', maxParticipants: 4, playersPerTeam: 5, 
         liveScoreEnabled: false, venueType: 'off', venues: '',
     });
@@ -126,9 +135,27 @@ const CreateTournamentForm = ({ setView, token }) => {
     );
 };
 
-// --- 2. MANAGE PARTICIPANTS FORM (UPDATED FOR SINGLE COLUMN) ---
+// --- 2. MANAGE PARTICIPANTS FORM (Unchanged) ---
 
 const ManageParticipantsForm = ({ tournament, token, setView }) => {
+    const navigate = useNavigate(); 
+
+    // Error check for missing tournament object
+    if (!tournament) {
+        return (
+            <div style={{...formContainerStyles, ...errorStyles}}>
+                Tournament details missing. Please select a tournament from the list.
+                <button 
+                    style={{...buttonStyles, marginTop: '20px', backgroundColor: '#333', color: '#fff'}} 
+                    onClick={() => setView('view')}
+                >
+                    ← Back to Tournament List
+                </button>
+            </div>
+        );
+    }
+    
+
     const isTeams = tournament.participantsType === 'teams';
     const [participantsList, setParticipantsList] = useState([]); 
     const [isLocked, setIsLocked] = useState(false); 
@@ -136,12 +163,37 @@ const ManageParticipantsForm = ({ tournament, token, setView }) => {
     const [success, setSuccess] = useState('');
     const [loading, setLoading] = useState(true);
 
+    // --- Start Tournament Logic (Helper Function) ---
+    const calculateReadyStatus = (participants) => {
+        const totalTeams = tournament.maxParticipants;
+        let readyCount = 0;
+        
+        participants.forEach(p => {
+            if (p.isReady) {
+                readyCount++;
+            }
+        });
+        
+        return { readyCount, totalTeams, allReady: readyCount === totalTeams };
+    };
+    
+    const { allReady } = calculateReadyStatus(participantsList);
+
+    const handleStartTournament = (tournamentId) => {
+        // In a real app, this should make a PUT request to update tournament status to 'ongoing'.
+        // For project demonstration, we navigate to the new view.
+        navigate(`/tournament/${tournamentId}`); // <<< NAVIGATE TO THE NEW PAGE
+    };
+    // ------------------------------------------------
+
+
     useEffect(() => {
         const fetchExistingParticipants = async () => {
             setLoading(true);
             setError('');
 
             try {
+                // Fetch the tournament again to get the populated participant data
                 const tourneyRes = await axios.get(`http://localhost:5000/api/tournaments/${tournament._id}`, {
                     headers: { 'x-auth-token': token }
                 });
@@ -151,13 +203,21 @@ const ManageParticipantsForm = ({ tournament, token, setView }) => {
                 setIsLocked(hasParticipants);
 
                 let initialList;
+
                 if (hasParticipants) {
-                    initialList = fullTourney.registeredParticipants.map((p, index) => ({
-                        id: index + 1,
-                        name: isTeams ? `Team ${index + 1}` : `Player ${index + 1}`, // Placeholder Name
-                        managerId: isTeams ? `MGR-${index + 1}` : undefined, // Placeholder for Manager ID
-                    }));
+                    // MAP POPULATED DATA TO FORM STATE
+                    initialList = fullTourney.registeredParticipants.map((p, index) => {
+                        const participantData = {
+                            id: index + 1,
+                            teamId: p._id, // Store the team ID 
+                            name: p.name || '', 
+                            managerId: isTeams ? (p.managerId?.uniqueId || '') : undefined, 
+                            isReady: p.isReady || false // CRITICAL: Get isReady status
+                        };
+                        return participantData;
+                    });
                 } else {
+                    // Create empty slots based on maxParticipants
                     initialList = Array.from({ length: fullTourney.maxParticipants }, (_, i) => ({ 
                         id: i + 1, name: '', managerId: isTeams ? '' : undefined, 
                     }));
@@ -166,6 +226,7 @@ const ManageParticipantsForm = ({ tournament, token, setView }) => {
                 setParticipantsList(initialList);
 
             } catch (err) {
+                console.error("Fetch Participant Error:", err);
                 setError(err.response?.data?.msg || 'Could not load tournament details for management.');
             } finally {
                 setLoading(false);
@@ -196,7 +257,7 @@ const ManageParticipantsForm = ({ tournament, token, setView }) => {
             if (isTeams) { return { teamName: p.name, managerId: p.managerId }; } else { return { name: p.name }; }
         });
         
-        // Final Validation Check (Point 5 Fix: Ensure Manager ID is COMPULSORY for teams)
+        // Final Validation Check
         if (dataToSend.some(item => (isTeams && (!item.teamName || !item.managerId)) || (!isTeams && !item.name))) {
              setError(`Please fill all required slots (Name and Manager ID for Teams).`);
              setLoading(false);
@@ -209,8 +270,9 @@ const ManageParticipantsForm = ({ tournament, token, setView }) => {
             await axios.post(`http://localhost:5000${endpoint}`, { participants: dataToSend }, { headers: { 'x-auth-token': token } });
             
             setSuccess(`Participants saved successfully!`);
-            setIsLocked(true); // LOCK the form after successful save
-            setLoading(false);
+            
+            // Re-fetch data to populate the newly saved names
+            setTimeout(() => setView('view'), 1500); 
 
         } catch (err) {
             setLoading(false);
@@ -218,10 +280,10 @@ const ManageParticipantsForm = ({ tournament, token, setView }) => {
         }
     };
     
+    // Check loading/error status BEFORE rendering the form
     if (loading) return <div style={formContainerStyles}>Loading participant slots...</div>;
-    if (error) return <div style={{...formContainerStyles, ...errorStyles}}>{error}</div>;
 
-    // Dynamic button based on isLocked state
+    // Dynamic button based on isLocked state (Edit or Save)
     const actionButton = isLocked ? (
         <button 
             type="button" 
@@ -240,43 +302,52 @@ const ManageParticipantsForm = ({ tournament, token, setView }) => {
         <div style={formContainerStyles}>
             <h2>Register Participants for: {tournament.name}</h2>
             <p>Type: **{tournament.participantsType.toUpperCase()}** | Slots: **{participantsList.length}**</p>
+            
             <p style={{marginTop: '10px', fontSize: '0.9em', color: isLocked ? '#00ffaa' : '#fff000'}}>
                 Status: **{isLocked ? 'LOCKED' : 'EDITING'}**
             </p>
             
             <form onSubmit={handleSubmit} style={{ marginTop: '20px' }}>
                 
-                {/* Single Column Participant List (POINT 1 FIX) */}
+                {/* Single Column Participant List */}
                 <div style={slotWrapperStyles}>
-                    {participantsList.map(p => (
-                        <div key={p.id} style={slotItemStyles}>
-                            <div style={{ width: '30px', fontWeight: 'bold' }}>{p.id}</div>
-                            <div style={{ flex: 1 }}>
-                                <input 
-                                    style={{...inputStyles, marginBottom: 0}} 
-                                    type="text" 
-                                    // POINT 3 FIX: Use simpler placeholder naming
-                                    placeholder={isTeams ? `Team ${p.id} Name` : `Player ${p.id} Name`}
-                                    value={p.name}
-                                    onChange={(e) => handleInputChange(p.id, 'name', e.target.value)}
-                                    required
-                                    disabled={isLocked} // LOCKING MECHANISM
-                                />
-                                {isTeams && (
+                    {participantsList.map(p => {
+                        const isReady = p.isReady; 
+                        
+                        return (
+                            <div key={p.id} style={slotItemStyles}>
+                                <div style={{ width: '30px', fontWeight: 'bold' }}>{p.id}</div>
+                                <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
                                     <input 
-                                        style={{...inputStyles, marginTop: '5px', marginBottom: 0}} 
+                                        style={{...inputStyles, marginBottom: 0, flexGrow: 1}} 
                                         type="text" 
-                                        // POINT 3 FIX: Use simpler placeholder naming
-                                        placeholder={`Manager ${p.id} ID (Compulsory)`} 
-                                        value={p.managerId}
-                                        onChange={(e) => handleInputChange(p.id, 'managerId', e.target.value)}
+                                        placeholder={isTeams ? `Team ${p.id}` : `Player ${p.id}`}
+                                        value={p.name}
+                                        onChange={(e) => handleInputChange(p.id, 'name', e.target.value)}
                                         required
                                         disabled={isLocked} // LOCKING MECHANISM
                                     />
-                                )}
+                                    
+                                    {/* READY SYMBOL DISPLAY */}
+                                    {isTeams && isReady && (
+                                        <span style={readySymbolStyles}>✅</span>
+                                    )}
+
+                                    {isTeams && (
+                                        <input 
+                                            style={{...inputStyles, marginTop: '5px', marginBottom: 0, marginLeft: '10px'}} 
+                                            type="text" 
+                                            placeholder={`Manager ${p.id} (Compulsory)`} 
+                                            value={p.managerId}
+                                            onChange={(e) => handleInputChange(p.id, 'managerId', e.target.value)}
+                                            required
+                                            disabled={isLocked} // LOCKING MECHANISM
+                                        />
+                                    )}
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
                 
                 {/* Error/Success Messages */}
@@ -285,8 +356,9 @@ const ManageParticipantsForm = ({ tournament, token, setView }) => {
             </form>
 
             
-            {/* BUTTONS MOVED BELOW THE LIST (POINT 4 FIX) */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '30px' }}>
+            {/* BUTTONS MOVED BELOW THE LIST (FINAL LOCATION) */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '30px', alignItems: 'center' }}>
+                
                 <button 
                     type="button" 
                     style={{...buttonStyles, backgroundColor: '#333', color: '#fff'}} 
@@ -295,15 +367,25 @@ const ManageParticipantsForm = ({ tournament, token, setView }) => {
                     ← Back to Tournament List
                 </button>
                 
-                {/* DYNAMIC REGISTER/SAVE/EDIT BUTTON (Aligned right) */}
-                {actionButton}
+                {/* NEW CONDITIONAL START BUTTON LOCATION */}
+                <div style={{ display: 'flex', gap: '15px' }}>
+                    {isLocked && allReady && (
+                        <button 
+                            style={startTournamentButtonStyles}
+                            onClick={() => handleStartTournament(tournament._id)} 
+                        >
+                            Start Tournament
+                        </button>
+                    )}
+                    {actionButton}
+                </div>
             </div>
         </div>
     );
 };
 
 
-// --- 3. VIEW ALL TOURNAMENTS (Navigation logic) ---
+// --- 3. VIEW ALL TOURNAMENTS (FINAL CLEANUP) ---
 
 const ViewTournaments = ({ token, setView, setSelectedTournament }) => {
     const [tournaments, setTournaments] = useState([]);
@@ -331,6 +413,25 @@ const ViewTournaments = ({ token, setView, setSelectedTournament }) => {
         setView('manage-participants');
     };
 
+    // LOGIC: Calculate Ready Status based on isReady field
+    const calculateReadyStatus = (tournament) => {
+        if (tournament.participantsType !== 'teams' || !tournament.playersPerTeam || tournament.playersPerTeam === 0) {
+            return { readyCount: 0, totalTeams: tournament.maxParticipants, allReady: true };
+        }
+
+        let readyCount = 0;
+        tournament.registeredParticipants.forEach(team => {
+            if (team.isReady) {
+                readyCount++;
+            }
+        });
+        return { readyCount, totalTeams: tournament.maxParticipants, allReady: readyCount === tournament.maxParticipants };
+    };
+
+    const handleStartTournament = (tournamentId) => {
+        alert(`Starting tournament ID: ${tournamentId}. This button is removed from here.`);
+    };
+
     if (loading) return <div style={listContainerStyles}>Loading tournaments...</div>;
     if (error) return <div style={listContainerStyles}>Error: {error}</div>;
 
@@ -341,22 +442,47 @@ const ViewTournaments = ({ token, setView, setSelectedTournament }) => {
             {tournaments.length === 0 ? (
                 <p>No tournaments have been created yet.</p>
             ) : (
-                tournaments.map(t => (
-                    <div key={t._id} style={tournamentCardStyles}>
-                        <h3>{t.name} ({t.sport.toUpperCase()})</h3>
-                        <p>Format: {t.format} | Participants: **{t.maxParticipants} {t.participantsType}**</p> 
-                        {t.participantsType === 'teams' && <p>Players per Team: **{t.playersPerTeam}**</p>}
-                        <p>Status: **{t.status.toUpperCase()}**</p>
-                        <p>Dates: {t.startDate ? new Date(t.startDate).toLocaleDateString() : 'N/A'} - {t.endDate ? new Date(t.endDate).toLocaleDateString() : 'N/A'}</p>
-                        
-                        <button 
-                            style={{...buttonStyles, backgroundColor: '#00ffaa', color: '#1a1a1a', fontSize: '0.9em', marginTop: '10px', width: 'auto'}}
-                            onClick={() => handleManageClick(t)} // Passes the entire tournament object
-                        >
-                            Manage Participants
-                        </button>
-                    </div>
-                ))
+                tournaments.map(t => {
+                    const { readyCount, totalTeams, allReady } = calculateReadyStatus(t);
+                    const isTeamsTournament = t.participantsType === 'teams';
+                    
+                    // Standardize status text for display
+                    const displayStatus = t.status.toLowerCase() === 'ongoing' ? 'ACTIVE' : t.status.toUpperCase();
+
+                    return (
+                        <div key={t._id} style={tournamentCardStyles}>
+                            <h3>{t.name} ({t.sport.toUpperCase()})</h3>
+                            <p>Format: {t.format} | Participants: **{t.maxParticipants} {t.participantsType}**</p> 
+                            
+                            {isTeamsTournament && (
+                                <>
+                                    <p>Players per Team: **{t.playersPerTeam}**</p>
+                                    
+                                    {/* REMOVED X/Y READY TEXT LINE ENTIRELY */}
+                                </>
+                            )}
+                            
+                            {/* FINAL STATUS DISPLAY FIX: Remove ** and apply color */}
+                            <p style={{marginBottom: '10px'}}>
+                                Status: 
+                                <span style={{ color: getStatusColor(t.status), marginLeft: '5px', fontWeight: 'bold' }}>
+                                    {displayStatus}
+                                </span>
+                            </p>
+                            <p>Dates: {t.startDate ? new Date(t.startDate).toLocaleDateString() : 'N/A'} - {t.endDate ? new Date(t.endDate).toLocaleDateString() : 'N/A'}</p>
+                            
+                            <div style={{ display: 'flex', gap: '15px', marginTop: '10px', alignItems: 'center' }}>
+                                
+                                <button 
+                                    style={buttonStyles}
+                                    onClick={() => handleManageClick(t)} 
+                                >
+                                    Manage Participants
+                                </button>
+                            </div>
+                        </div>
+                    )
+                })
             )}
         </div>
     );
@@ -368,7 +494,7 @@ const ManageCoordinators = () => {
 }
 
 
-// --- MAIN ADMIN DASHBOARD COMPONENT ---
+// --- MAIN ADMIN DASHBOARD COMPONENT (Unchanged) ---
 
 const AdminDashboard = () => {
     const navigate = useNavigate();

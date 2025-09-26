@@ -1,4 +1,4 @@
-// backend/models/Team.js
+// backend/models/Team.js - FULL UPDATED CODE (Add isReady Field)
 
 const mongoose = require('mongoose');
 
@@ -8,14 +8,12 @@ const teamSchema = new mongoose.Schema({
         required: true,
         trim: true
     },
-    // The manager is linked to a User document (Manager Role)
     managerId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User', 
         required: true,
-        unique: true // A manager can only manage one team directly
+        unique: true
     },
-    // The players on the team's current roster
     roster: [{
         playerId: {
             type: mongoose.Schema.Types.ObjectId,
@@ -26,13 +24,18 @@ const teamSchema = new mongoose.Schema({
             default: false
         }
     }],
-    // The tournament the team is registered for (can be many)
     tournaments: [{
         tournamentId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'Tournament'
         }
-    }]
+    }],
+    // --- NEW FIELD ADDED ---
+    isReady: {
+        type: Boolean,
+        default: false // Default to not ready
+    }
+    // -----------------------
 }, {
     timestamps: true
 });

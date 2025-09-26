@@ -1,4 +1,4 @@
-// backend/models/User.js
+// backend/models/User.js - FULL UPDATED CODE (Final Hashing and Comparison Fix)
 
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
@@ -35,6 +35,13 @@ userSchema.pre('save', async function (next) {
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
 });
+
+// Method for secure login comparison
+userSchema.methods.matchPassword = async function (enteredPassword) {
+    return await bcrypt.compare(enteredPassword, this.password);
+};
+
+// Removed explicit index definitions to fix warnings
 
 const User = mongoose.model('User', userSchema);
 
