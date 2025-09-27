@@ -1,22 +1,26 @@
-// frontend/src/pages/AdminDashboard.jsx - FULL UPDATED CODE (Final Cleanup: Remove ** and Add Status Color)
-
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { useNavigate, Navigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom'; 
 
 // --- Global Functions to get data from Local Storage ---
 const getAdminToken = () => localStorage.getItem('token'); 
 const LOGGED_IN_USERNAME = localStorage.getItem('username') || 'Admin'; 
 
-// Helper function to determine status color (Re-added here for ViewTournaments component)
+// Helper function to determine status color
 const getStatusColor = (status) => {
     const s = status ? status.toLowerCase() : 'pending';
     if (s === 'pending') return '#ff6b6b'; // Red for Pending
     if (s === 'ongoing') return '#39ff14'; // Green for Active/Ongoing
-    return '#a0a0a0'; // Gray for completed or other
+    if (s === 'completed') return '#a0a0a0'; // Gray for completed
+    return '#a0a0a0'; 
 };
 
-// --- STYLES (Finalized for Layout) ---
+// 💡 NEW HELPER FUNCTION for Single Elimination validation
+const isPowerOfTwo = (n) => {
+    return n && (n & (n - 1)) === 0;
+};
+
+// --- STYLES (Unchanged) ---
 const containerStyles = { padding: '20px', backgroundColor: '#0a0a0a', minHeight: '100vh', color: '#e0e0e0', position: 'relative' }; 
 const headerStyles = { color: '#00ffaa', borderBottom: '2px solid #333', paddingBottom: '10px', marginBottom: '20px' };
 const buttonGroupStyles = { display: 'flex', gap: '20px', marginBottom: '40px' };
@@ -27,21 +31,33 @@ const labelStyles = { display: 'block', marginBottom: '5px', fontWeight: 'bold',
 const inputStyles = { width: '100%', padding: '10px', border: '1px solid #333', borderRadius: '5px', backgroundColor: '#2c2c2c', color: '#e0e0e0', boxSizing: 'border-box' };
 const selectStyles = { ...inputStyles, appearance: 'none' };
 const submitButtonStyles = { ...buttonStyles, backgroundColor: '#00ffaa', color: '#1a1a1a', border: 'none', marginTop: '20px' };
+const deleteButtonStyles = { padding: '8px 12px', backgroundColor: '#ff6b6b', color: '#1a1a1a', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', transition: 'background-color 0.2s' };
 const errorStyles = { color: '#ff6b6b', marginTop: '10px' };
 const successStyles = { color: '#00ffaa', marginTop: '10px' };
 const listContainerStyles = { backgroundColor: '#1a1a1a', padding: '30px', borderRadius: '10px' };
-const tournamentCardStyles = { backgroundColor: '#2c2c2c', padding: '15px', borderRadius: '8px', marginBottom: '10px', borderLeft: '4px solid #00ffaa' };
+const tournamentCardStyles = { 
+    backgroundColor: '#2c2c2c', 
+    padding: '15px', 
+    borderRadius: '8px', 
+    marginBottom: '10px', 
+    borderLeft: '4px solid #00ffaa',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center' 
+};
 
 const welcomeMessageStyles = { fontSize: '3.5em', fontWeight: '900', color: '#e0e0e0', margin: 0 };
 const usernameHighlightStyles = { color: '#00ffaa', marginLeft: '15px' };
 const headerWrapperStyles = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' };
 const logoutButtonStyles = { padding: '10px 15px', backgroundColor: '#00ffaa', color: '#1a1a1a', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', transition: 'background-color 0.2s' };
 
-// --- Styles for the new Participants Layout ---
+// --- Styles for the new Participants Layout (Unchanged) ---
 const slotWrapperStyles = { display: 'flex', flexDirection: 'column', gap: '10px' }; 
 const slotItemStyles = { backgroundColor: '#2c2c2c', borderRadius: '5px', padding: '10px', display: 'flex', alignItems: 'center', gap: '10px' };
 const readySymbolStyles = { color: '#39ff14', fontSize: '1.2em', marginLeft: '10px' };
 const startTournamentButtonStyles = { ...submitButtonStyles, backgroundColor: '#00ffaa', color: '#1a1a1a', marginLeft: '20px' };
+const cardInfoStyles = { flexGrow: 1 };
+const cardActionsStyles = { display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' };
 
 
 // ##################################################################
@@ -49,34 +65,53 @@ const startTournamentButtonStyles = { ...submitButtonStyles, backgroundColor: '#
 // ##################################################################
 
 
-// --- 1. CREATE TOURNAMENT FORM (Unchanged) ---
+// --- 1. CREATE TOURNAMENT FORM (Updated with model fix) ---
 
 const CreateTournamentForm = ({ setView, token }) => {
     const [formData, setFormData] = useState({
         name: '', sport: 'football', format: 'single elimination', 
         startDate: '', endDate: '',
         datesRequired: false, 
-        participantsType: 'teams', maxParticipants: 4, playersPerTeam: 5, 
+        // FIX 1: Set default to 'Team' (capitalized, singular)
+        participantsType: 'Team', maxParticipants: 4, playersPerTeam: 5, 
         liveScoreEnabled: false, venueType: 'off', venues: '',
     });
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+    
+    // Derived state for error message display
+    const isSingleElimination = formData.format === 'single elimination';
+    const isValidBracketSize = isPowerOfTwo(Number(formData.maxParticipants)) && Number(formData.maxParticipants) >= 2;
+    const bracketError = isSingleElimination && !isValidBracketSize 
+        ? 'Single Elimination requires participant counts of 2, 4, 8, 16, etc.' 
+        : '';
+
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
         let newValue = type === 'checkbox' ? checked : value;
 
         if (type === 'checkbox') { newValue = checked; }
-        if (name === 'participantsType' && newValue === 'players') { setFormData(prev => ({ ...prev, participantsType: 'players', playersPerTeam: 0 })); return; }
+        // FIX 2: Check for Model Names 'Player'/'Team'
+        if (name === 'participantsType' && newValue === 'Player') { setFormData(prev => ({ ...prev, participantsType: 'Player', playersPerTeam: 0 })); return; }
         if (name === 'datesRequired' && newValue === false) { setFormData(prev => ({ ...prev, datesRequired: false, startDate: '', endDate: '' })); return; }
 
         setFormData({ ...formData, [name]: newValue, });
+        // Clear global error when user changes a field
+        setError('');
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault(); setError(''); setSuccess('');
 
-        if (formData.participantsType === 'teams' && (!formData.playersPerTeam || formData.playersPerTeam < 1)) { setError('Please specify the number of players per team.'); return; }
+        // Frontend Validation Check for Single Elimination
+        if (isSingleElimination && !isValidBracketSize) {
+            setError(bracketError);
+            return;
+        }
+
+        // FIX 3: Check for Model Name 'Team'
+        if (formData.participantsType === 'Team' && (!formData.playersPerTeam || formData.playersPerTeam < 1)) { setError('Please specify the number of players per team.'); return; }
         if (formData.maxParticipants < 2) { setError('Minimum 2 participants (teams or players) required.'); return; }
         if (formData.datesRequired && (!formData.startDate || !formData.endDate)) { setError('Start and End dates are required for scheduled tournaments.'); return; }
 
@@ -84,7 +119,8 @@ const CreateTournamentForm = ({ setView, token }) => {
             ...formData,
             startDate: formData.datesRequired ? formData.startDate : undefined, 
             endDate: formData.datesRequired ? formData.endDate : undefined, 
-            playersPerTeam: formData.participantsType === 'teams' ? formData.playersPerTeam : undefined,
+            // FIX 4: Check for Model Name 'Team'
+            playersPerTeam: formData.participantsType === 'Team' ? formData.playersPerTeam : undefined,
             venues: formData.venueType === 'multi' ? formData.venues.split(',').map(v => v.trim()) : (formData.venueType === 'single' ? [formData.venues] : []),
         };
 
@@ -105,9 +141,46 @@ const CreateTournamentForm = ({ setView, token }) => {
             <h2>Create Tournament</h2>
             <form onSubmit={handleSubmit}>
                 <div style={inputGroupStyles}><label style={labelStyles} htmlFor="name">Tournament Name</label><input style={inputStyles} type="text" id="name" name="name" value={formData.name} onChange={handleChange} required /></div>
-                <div style={{ display: 'flex', gap: '20px' }}><div style={{...inputGroupStyles, flex: 1}}><label style={labelStyles} htmlFor="sport">Sport Type</label><select style={selectStyles} id="sport" name="sport" value={formData.sport} onChange={handleChange} required>{['football', 'cricket', 'badminton', 'volleyball', 'basketball', 'table tennis', 'esports', 'other'].map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}</select></div><div style={{...inputGroupStyles, flex: 1}}><label style={labelStyles} htmlFor="format">Tournament Format</label><select style={selectStyles} id="format" name="format" value={formData.format} onChange={handleChange} required><option value="single elimination">Single Elimination</option><option value="round robin">Round Robin</option><option value="group stage">Group Stage</option></select></div></div>
-                <div style={{ display: 'flex', gap: '20px' }}><div style={{...inputGroupStyles, flex: 1}}><label style={labelStyles} htmlFor="participantsType">Participants</label><select style={selectStyles} id="participantsType" name="participantsType" value={formData.participantsType} onChange={handleChange} required><option value="teams">Teams</option><option value="players">Players (Individual)</option></select></div><div style={{...inputGroupStyles, flex: 1}}><label style={labelStyles} htmlFor="maxParticipants">No. of {formData.participantsType.charAt(0).toUpperCase() + formData.participantsType.slice(1)}</label><input style={inputStyles} type="number" id="maxParticipants" name="maxParticipants" value={formData.maxParticipants} onChange={handleChange} required min="2" /></div>
-                    {formData.participantsType === 'teams' && (<div style={{...inputGroupStyles, flex: 1}}><label style={labelStyles} htmlFor="playersPerTeam">Players Per Team</label><input style={inputStyles} type="number" id="playersPerTeam" name="playersPerTeam" value={formData.playersPerTeam} onChange={handleChange} required min="1" /></div>)}
+                <div style={{ display: 'flex', gap: '20px' }}>
+                    <div style={{...inputGroupStyles, flex: 1}}>
+                        <label style={labelStyles} htmlFor="sport">Sport Type</label>
+                        <select style={selectStyles} id="sport" name="sport" value={formData.sport} onChange={handleChange} required>
+                            {['football', 'cricket', 'badminton', 'volleyball', 'basketball', 'table tennis', 'esports', 'other'].map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+                        </select>
+                    </div>
+                    <div style={{...inputGroupStyles, flex: 1}}>
+                        <label style={labelStyles} htmlFor="format">Tournament Format</label>
+                        <select style={selectStyles} id="format" name="format" value={formData.format} onChange={handleChange} required>
+                            <option value="single elimination">Single Elimination</option>
+                            <option value="round robin">Round Robin</option>
+                            <option value="group stage">Group Stage</option>
+                        </select>
+                    </div>
+                </div>
+                <div style={{ display: 'flex', gap: '20px' }}>
+                    <div style={{...inputGroupStyles, flex: 1}}>
+                        <label style={labelStyles} htmlFor="participantsType">Participants</label>
+                        <select 
+                            style={selectStyles} 
+                            id="participantsType" 
+                            name="participantsType" 
+                            value={formData.participantsType} 
+                            onChange={handleChange} 
+                            required
+                        >
+                            {/* FIX 5: Change value to 'Team' */}
+                            <option value="Team">Teams</option>
+                            {/* FIX 6: Change value to 'Player' */}
+                            <option value="Player">Players (Individual)</option>
+                        </select>
+                    </div>
+                    <div style={{...inputGroupStyles, flex: 1}}>
+                        <label style={labelStyles} htmlFor="maxParticipants">No. of {formData.participantsType.charAt(0).toUpperCase() + formData.participantsType.slice(1)}</label>
+                        <input style={inputStyles} type="number" id="maxParticipants" name="maxParticipants" value={formData.maxParticipants} onChange={handleChange} required min="2" />
+                        {bracketError && <p style={errorStyles}>{bracketError}</p>} 
+                    </div>
+                    {/* FIX 7: Check for Model Name 'Team' */}
+                    {formData.participantsType === 'Team' && (<div style={{...inputGroupStyles, flex: 1}}><label style={labelStyles} htmlFor="playersPerTeam">Players Per Team</label><input style={inputStyles} type="number" id="playersPerTeam" name="playersPerTeam" value={formData.playersPerTeam} onChange={handleChange} required min="1" /></div>)}
                 </div>
                 
                 <div style={inputGroupStyles}>
@@ -126,7 +199,7 @@ const CreateTournamentForm = ({ setView, token }) => {
                 {(formData.venueType !== 'off') && (<div style={inputGroupStyles}><label style={labelStyles} htmlFor="venues">Venue Name(s)</label><input style={inputStyles} type="text" id="venues" name="venues" placeholder={formData.venueType === 'single' ? 'e.g., College Ground' : 'e.g., Venue A, Venue B, Venue C (comma separated)'} value={formData.venues} onChange={handleChange} required /></div>)}
                 <div style={inputGroupStyles}><label style={labelStyles}><input type="checkbox" name="liveScoreEnabled" checked={formData.liveScoreEnabled} onChange={handleChange} style={{ marginRight: '10px' }}/>Enable Real-Time Live Scoring</label></div>
                 
-                <button type="submit" style={submitButtonStyles}>Create Tournament</button>
+                <button type="submit" style={submitButtonStyles} disabled={!!bracketError}>Create Tournament</button>
                 
                 {error && <p style={errorStyles}>Error: {error}</p>}
                 {success && <p style={successStyles}>Success: {success}</p>}
@@ -135,10 +208,13 @@ const CreateTournamentForm = ({ setView, token }) => {
     );
 };
 
-// --- 2. MANAGE PARTICIPANTS FORM (Unchanged) ---
+// --- 2. MANAGE PARTICIPANTS FORM (Updated with model fix) ---
 
 const ManageParticipantsForm = ({ tournament, token, setView }) => {
     const navigate = useNavigate(); 
+    
+    // FIX 8: Check for Model Name 'Team'
+    const isTeams = tournament.participantsType === 'Team'; 
 
     // Error check for missing tournament object
     if (!tournament) {
@@ -156,33 +232,61 @@ const ManageParticipantsForm = ({ tournament, token, setView }) => {
     }
     
 
-    const isTeams = tournament.participantsType === 'teams';
     const [participantsList, setParticipantsList] = useState([]); 
+    // 💡 isLocked is automatically true for player tournaments once saved
     const [isLocked, setIsLocked] = useState(false); 
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [loading, setLoading] = useState(true);
 
     // --- Start Tournament Logic (Helper Function) ---
+    // 💡 Simplified: If it's not a team tournament, it's always ready once slots are filled.
     const calculateReadyStatus = (participants) => {
-        const totalTeams = tournament.maxParticipants;
-        let readyCount = 0;
+        const totalParticipants = tournament.maxParticipants;
         
+        if (!isTeams) {
+            // For players, if all slots are filled and saved, it's ready.
+            const allSlotsFilled = participants.every(p => p.name);
+            return { readyCount: allSlotsFilled ? totalParticipants : 0, totalParticipants: totalParticipants, allReady: allSlotsFilled };
+        }
+
+        // --- Existing Team Logic ---
+        let readyCount = 0;
         participants.forEach(p => {
             if (p.isReady) {
                 readyCount++;
             }
         });
         
-        return { readyCount, totalTeams, allReady: readyCount === totalTeams };
+        return { readyCount, totalParticipants: totalParticipants, allReady: readyCount === totalParticipants };
     };
     
     const { allReady } = calculateReadyStatus(participantsList);
 
-    const handleStartTournament = (tournamentId) => {
-        // In a real app, this should make a PUT request to update tournament status to 'ongoing'.
-        // For project demonstration, we navigate to the new view.
-        navigate(`/tournament/${tournamentId}`); // <<< NAVIGATE TO THE NEW PAGE
+    const handleStartTournament = async (tournamentId) => { 
+        setError('');
+        setSuccess('');
+        
+        try {
+            // API call to trigger schedule generation (which updates status to 'ongoing' on the backend)
+            const res = await axios.post(`http://localhost:5000/api/matches/generate/${tournamentId}`, {}, {
+                headers: { 'x-auth-token': token }
+            });
+
+            setSuccess(res.data.msg + " Navigating to view...");
+            
+            // Navigate to the view page after successful generation
+            setTimeout(() => {
+                navigate(`/tournament/${tournamentId}`); // NAVIGATE TO THE NEW PAGE
+                
+                // Also ensures the main dashboard refreshes to show the new 'View Tournament' button
+                setView('view'); 
+            }, 1500); 
+            
+        } catch (err) {
+            console.error("Schedule Generation Error:", err.response || err);
+            setError(err.response?.data?.msg || 'Failed to generate schedule. Check if all teams are ready and roster complete.');
+        }
     };
     // ------------------------------------------------
 
@@ -193,13 +297,13 @@ const ManageParticipantsForm = ({ tournament, token, setView }) => {
             setError('');
 
             try {
-                // Fetch the tournament again to get the populated participant data
                 const tourneyRes = await axios.get(`http://localhost:5000/api/tournaments/${tournament._id}`, {
                     headers: { 'x-auth-token': token }
                 });
                 const fullTourney = tourneyRes.data;
 
                 const hasParticipants = fullTourney.registeredParticipants && fullTourney.registeredParticipants.length > 0;
+                // 💡 Player tournaments are locked once participants are saved
                 setIsLocked(hasParticipants);
 
                 let initialList;
@@ -209,10 +313,10 @@ const ManageParticipantsForm = ({ tournament, token, setView }) => {
                     initialList = fullTourney.registeredParticipants.map((p, index) => {
                         const participantData = {
                             id: index + 1,
-                            teamId: p._id, // Store the team ID 
+                            teamId: p._id, 
                             name: p.name || '', 
                             managerId: isTeams ? (p.managerId?.uniqueId || '') : undefined, 
-                            isReady: p.isReady || false // CRITICAL: Get isReady status
+                            isReady: p.isReady || false // Only relevant for teams
                         };
                         return participantData;
                     });
@@ -254,12 +358,14 @@ const ManageParticipantsForm = ({ tournament, token, setView }) => {
         setLoading(true);
 
         const dataToSend = participantsList.map(p => {
+            // FIX 9: Check for Model Name 'Team'
             if (isTeams) { return { teamName: p.name, managerId: p.managerId }; } else { return { name: p.name }; }
         });
         
         // Final Validation Check
+        // FIX 10: Check for Model Name 'Team'
         if (dataToSend.some(item => (isTeams && (!item.teamName || !item.managerId)) || (!isTeams && !item.name))) {
-             setError(`Please fill all required slots (Name and Manager ID for Teams).`);
+             setError(`Please fill all required slots (Name ${isTeams ? 'and Manager ID' : ''}).`);
              setLoading(false);
              return;
         }
@@ -301,7 +407,8 @@ const ManageParticipantsForm = ({ tournament, token, setView }) => {
     return (
         <div style={formContainerStyles}>
             <h2>Register Participants for: {tournament.name}</h2>
-            <p>Type: **{tournament.participantsType.toUpperCase()}** | Slots: **{participantsList.length}**</p>
+            {/* FIX 11: Display correct Type (remove plural S) */}
+            <p>Type: **{tournament.participantsType.toUpperCase()}** | Slots: **{participantsList.length}**</p> 
             
             <p style={{marginTop: '10px', fontSize: '0.9em', color: isLocked ? '#00ffaa' : '#fff000'}}>
                 Status: **{isLocked ? 'LOCKED' : 'EDITING'}**
@@ -321,6 +428,7 @@ const ManageParticipantsForm = ({ tournament, token, setView }) => {
                                     <input 
                                         style={{...inputStyles, marginBottom: 0, flexGrow: 1}} 
                                         type="text" 
+                                        // FIX 12: Use correct Name in Placeholder (e.g., Team 1)
                                         placeholder={isTeams ? `Team ${p.id}` : `Player ${p.id}`}
                                         value={p.name}
                                         onChange={(e) => handleInputChange(p.id, 'name', e.target.value)}
@@ -328,11 +436,12 @@ const ManageParticipantsForm = ({ tournament, token, setView }) => {
                                         disabled={isLocked} // LOCKING MECHANISM
                                     />
                                     
-                                    {/* READY SYMBOL DISPLAY */}
+                                    {/* 💡 Team checkmark only for teams */}
                                     {isTeams && isReady && (
                                         <span style={readySymbolStyles}>✅</span>
                                     )}
 
+                                    {/* 💡 Manager ID input only for teams */}
                                     {isTeams && (
                                         <input 
                                             style={{...inputStyles, marginTop: '5px', marginBottom: 0, marginLeft: '10px'}} 
@@ -367,9 +476,10 @@ const ManageParticipantsForm = ({ tournament, token, setView }) => {
                     ← Back to Tournament List
                 </button>
                 
-                {/* NEW CONDITIONAL START BUTTON LOCATION */}
+                {/* START BUTTON LOGIC */}
                 <div style={{ display: 'flex', gap: '15px' }}>
-                    {isLocked && allReady && (
+                    {/* 💡 LOGIC CHANGE: All ready always true for players (if locked). */}
+                    {(isLocked && allReady && tournament.status.toLowerCase() === 'pending') && ( 
                         <button 
                             style={startTournamentButtonStyles}
                             onClick={() => handleStartTournament(tournament._id)} 
@@ -385,51 +495,82 @@ const ManageParticipantsForm = ({ tournament, token, setView }) => {
 };
 
 
-// --- 3. VIEW ALL TOURNAMENTS (FINAL CLEANUP) ---
+// --- 3. VIEW ALL TOURNAMENTS (Fixed totalParticipants scope error and model checks) ---
 
-const ViewTournaments = ({ token, setView, setSelectedTournament }) => {
+const ViewTournaments = ({ token, setView, setSelectedTournament, fetchTournaments }) => {
+    const navigate = useNavigate(); 
     const [tournaments, setTournaments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
+    const fetchAllTournaments = async () => {
+        if (!token) { setError('Authentication required to view tournaments.'); setLoading(false); return; }
+        try {
+            const res = await axios.get('http://localhost:5000/api/tournaments', { headers: { 'x-auth-token': token } });
+            setTournaments(res.data);
+            setLoading(false);
+        } catch (err) {
+            setError('Failed to fetch tournaments. Token may be invalid or expired.');
+            setLoading(false);
+            console.error(err);
+        }
+    };
+
     useEffect(() => {
-        const fetchTournaments = async () => {
-            if (!token) { setError('Authentication required to view tournaments.'); setLoading(false); return; }
-            try {
-                const res = await axios.get('http://localhost:5000/api/tournaments', { headers: { 'x-auth-token': token } });
-                setTournaments(res.data);
-                setLoading(false);
-            } catch (err) {
-                setError('Failed to fetch tournaments. Token may be invalid or expired.');
-                setLoading(false);
-                console.error(err);
-            }
-        };
-        fetchTournaments();
+        fetchAllTournaments();
     }, [token]);
 
     const handleManageClick = (tournament) => {
         setSelectedTournament(tournament); // Pass the entire tournament object
         setView('manage-participants');
     };
+    
+    // --- DELETE HANDLER (Unchanged) ---
+    const handleDeleteTournament = async (tournamentId, name) => {
+        if (!window.confirm(`Are you sure you want to permanently delete the tournament: ${name}? This action cannot be undone.`)) {
+            return;
+        }
 
-    // LOGIC: Calculate Ready Status based on isReady field
+        try {
+            await axios.delete(`http://localhost:5000/api/tournaments/${tournamentId}`, { 
+                headers: { 'x-auth-token': token } 
+            });
+            alert(`Tournament '${name}' deleted successfully.`);
+            fetchAllTournaments(); // Refresh the list
+        } catch (err) {
+            console.error('Delete failed:', err.response || err);
+            alert(err.response?.data?.msg || 'Failed to delete tournament. Check console for details.');
+        }
+    };
+    // -------------------------
+
+
+    // LOGIC: Calculate Ready Status based on isReady field (FIXED SCOPE ERROR)
     const calculateReadyStatus = (tournament) => {
-        if (tournament.participantsType !== 'teams' || !tournament.playersPerTeam || tournament.playersPerTeam === 0) {
-            return { readyCount: 0, totalTeams: tournament.maxParticipants, allReady: true };
+        // FIX: Define totalParticipants locally to prevent ReferenceError
+        const totalParticipants = tournament.maxParticipants;
+        
+        // FIX 13: Check for Model Name 'Player'
+        if (tournament.participantsType === 'Player') {
+            const count = tournament.registeredParticipants?.length || 0;
+            return { readyCount: count, totalParticipants: totalParticipants, allReady: count === totalParticipants };
+        }
+        
+        // Existing team logic
+        // FIX 14: Check for Model Name 'Team'
+        if (tournament.participantsType !== 'Team' || !tournament.playersPerTeam || tournament.playersPerTeam === 0) {
+            // Treat non-team tournaments (other than players) as ready if participant count is met
+            const count = (tournament.registeredParticipants?.length || 0);
+            return { readyCount: count, totalParticipants: totalParticipants, allReady: count === totalParticipants };
         }
 
         let readyCount = 0;
         tournament.registeredParticipants.forEach(team => {
-            if (team.isReady) {
+            if (team && team.isReady) {
                 readyCount++;
             }
         });
-        return { readyCount, totalTeams: tournament.maxParticipants, allReady: readyCount === tournament.maxParticipants };
-    };
-
-    const handleStartTournament = (tournamentId) => {
-        alert(`Starting tournament ID: ${tournamentId}. This button is removed from here.`);
+        return { readyCount, totalParticipants: totalParticipants, allReady: readyCount === totalParticipants };
     };
 
     if (loading) return <div style={listContainerStyles}>Loading tournaments...</div>;
@@ -443,45 +584,74 @@ const ViewTournaments = ({ token, setView, setSelectedTournament }) => {
                 <p>No tournaments have been created yet.</p>
             ) : (
                 tournaments.map(t => {
-                    const { readyCount, totalTeams, allReady } = calculateReadyStatus(t);
-                    const isTeamsTournament = t.participantsType === 'teams';
+                    const { readyCount, totalParticipants, allReady } = calculateReadyStatus(t);
+                    // FIX 15: Check for Model Name 'Team'
+                    const isTeamsTournament = t.participantsType === 'Team';
                     
-                    // Standardize status text for display
-                    const displayStatus = t.status.toLowerCase() === 'ongoing' ? 'ACTIVE' : t.status.toUpperCase();
+                    // FIX for "View Tournament" button visibility: 
+                    // The button should be visible if the status is ongoing OR completed.
+                    const isViewable = t.status.toLowerCase() === 'ongoing' || t.status.toLowerCase() === 'completed'; 
+                    
+                    // Standardize status text
+                    const displayStatus = t.status.toUpperCase();
 
                     return (
                         <div key={t._id} style={tournamentCardStyles}>
-                            <h3>{t.name} ({t.sport.toUpperCase()})</h3>
-                            <p>Format: {t.format} | Participants: **{t.maxParticipants} {t.participantsType}**</p> 
                             
-                            {isTeamsTournament && (
-                                <>
-                                    <p>Players per Team: **{t.playersPerTeam}**</p>
-                                    
-                                    {/* REMOVED X/Y READY TEXT LINE ENTIRELY */}
-                                </>
-                            )}
-                            
-                            {/* FINAL STATUS DISPLAY FIX: Remove ** and apply color */}
-                            <p style={{marginBottom: '10px'}}>
-                                Status: 
-                                <span style={{ color: getStatusColor(t.status), marginLeft: '5px', fontWeight: 'bold' }}>
-                                    {displayStatus}
-                                </span>
-                            </p>
-                            <p>Dates: {t.startDate ? new Date(t.startDate).toLocaleDateString() : 'N/A'} - {t.endDate ? new Date(t.endDate).toLocaleDateString() : 'N/A'}</p>
-                            
-                            <div style={{ display: 'flex', gap: '15px', marginTop: '10px', alignItems: 'center' }}>
+                            <div style={cardInfoStyles}>
+                                <h3>{t.name} ({t.sport.toUpperCase()})</h3>
+                                {/* FIX 16: Display participantsType as plural for readability */}
+                                <p>Format: {t.format} | Participants: **{t.maxParticipants} {t.participantsType === 'Team' ? 'Teams' : 'Players'}**</p> 
                                 
+                                {isTeamsTournament && (
+                                    <p>Players per Team: **{t.playersPerTeam}**</p>
+                                )}
+                                
+                                {/* FINAL STATUS DISPLAY FIX: Apply color */}
+                                <p style={{marginBottom: '10px'}}>
+                                    Status: 
+                                    <span style={{ color: getStatusColor(displayStatus), marginLeft: '5px', fontWeight: 'bold' }}>
+                                        {displayStatus}
+                                    </span>
+                                </p>
+                                <p style={{fontSize: '0.9em'}}>Dates: {t.startDate ? new Date(t.startDate).toLocaleDateString() : 'N/A'} - {t.endDate ? new Date(t.endDate).toLocaleDateString() : 'N/A'}</p>
+                                
+                                {/* FIX 17: Display participantsType as plural for readability */}
+                                <p style={{fontSize: '0.9em', color: allReady ? '#00ffaa' : '#ff6b6b'}}>
+                                    Readiness: {readyCount} / {totalParticipants} {isTeamsTournament ? 'Teams Ready' : 'Participants Registered'}
+                                </p>
+                            </div>
+                            
+                            <div style={cardActionsStyles}>
+                                
+                                {/* Existing Manage Participants Button */}
                                 <button 
                                     style={buttonStyles}
                                     onClick={() => handleManageClick(t)} 
                                 >
                                     Manage Participants
                                 </button>
+
+                                {/* CONDITIONAL "View Tournament" Button (Now visible if Viewable) */}
+                                {isViewable && (
+                                    <button 
+                                        style={{ ...buttonStyles, backgroundColor: '#39ff14', color: '#1a1a1a', border: 'none' }} 
+                                        onClick={() => navigate(`/tournament/${t._id}`)} // Navigate to the dedicated view
+                                    >
+                                        View Tournament
+                                    </button>
+                                )}
+                                
+                                {/* NEW DELETE BUTTON */}
+                                <button 
+                                    style={deleteButtonStyles}
+                                    onClick={() => handleDeleteTournament(t._id, t.name)}
+                                >
+                                    Delete
+                                </button>
                             </div>
                         </div>
-                    )
+                    );
                 })
             )}
         </div>
@@ -501,7 +671,7 @@ const AdminDashboard = () => {
     const token = getAdminToken(); 
     const loggedInUsername = LOGGED_IN_USERNAME; 
     
-    const [currentView, setCurrentView] = useState('home'); 
+    const [currentView, setCurrentView] = useState('view'); // Default to view list
     const [selectedTournament, setSelectedTournament] = useState(null); 
 
     const handleLogout = () => {
@@ -515,18 +685,21 @@ const AdminDashboard = () => {
         return (<div style={containerStyles}><h1 style={errorStyles}>Access Denied. Please log in as Admin.</h1></div>);
     }
 
-    const renderContent = () => {
+    // Pass fetchAllTournaments down to ViewTournaments so it can refresh after delete
+    const renderContent = (fetchTournaments) => {
         switch (currentView) {
             case 'create-tournament': 
                 return <CreateTournamentForm setView={setCurrentView} token={token} />;
             case 'view':
-                return <ViewTournaments setView={setCurrentView} setSelectedTournament={setSelectedTournament} token={token} />; 
+                // Pass the necessary props including the view setter and the fetch function
+                return <ViewTournaments setView={setCurrentView} setSelectedTournament={setSelectedTournament} token={token} fetchTournaments={fetchTournaments} />; 
             case 'manage-participants': 
                 return <ManageParticipantsForm tournament={selectedTournament} token={token} setView={setCurrentView} />;
             case 'coordinators':
                 return <ManageCoordinators />;
             case 'home':
             default:
+                // Default to 'view' on load since that's the most common action
                 return (
                     <div style={{height: '200px'}}>
                         <p style={{fontSize: '1.2em'}}>Select an option above to begin management.</p>
@@ -538,7 +711,7 @@ const AdminDashboard = () => {
     return (
         <div style={containerStyles}>
             
-            {/* NEW: Wrapper for Welcome Message and Logout Button */}
+            {/* Wrapper for Welcome Message and Logout Button */}
             <div style={headerWrapperStyles}>
                 {/* Personalized Welcome Message */}
                 <div style={welcomeMessageStyles}>
