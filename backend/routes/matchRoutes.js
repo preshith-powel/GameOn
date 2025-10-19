@@ -1,4 +1,4 @@
-// backend/routes/matchRoutes.js - FULL UPDATED CODE (Fix Score Saving)
+// backend/routes/matchRoutes.js - FINAL CODE
 
 const express = require('express');
 const router = express.Router();
@@ -9,17 +9,15 @@ const auth = require('../middleware/auth');
 const ADMIN_COORDINATOR_MIDDLEWARE = [auth.protect, auth.checkRole(['admin', 'coordinator'])];
 
 // @route   GET /api/matches/:tournamentId
+// @access  Public (for Spectator view)
 router.get('/:tournamentId', async (req, res) => {
     try {
         const tournamentId = req.params.tournamentId;
         
         const baseTournament = await Tournament.findById(tournamentId).select('participantsType');
         
-        if (!baseTournament) {
-            return res.status(404).json({ msg: 'Tournament not found.' });
-        }
+        if (!baseTournament) { return res.status(404).json({ msg: 'Tournament not found.' }); }
         
-        // Dynamically determine model based on the stored value ('Team' or 'Player')
         const participantModel = baseTournament.participantsType; 
 
         // Find matches and populate participants based on the determined model
@@ -40,15 +38,14 @@ router.get('/:tournamentId', async (req, res) => {
 
 
 // @route   POST /api/matches/generate/:tournamentId
+// @access  Admin/Coordinator
 router.post('/generate/:tournamentId', ...ADMIN_COORDINATOR_MIDDLEWARE, async (req, res) => {
     const tournamentId = req.params.tournamentId;
     
     try {
         const tournament = await Tournament.findById(tournamentId);
 
-        if (!tournament) {
-            return res.status(404).json({ msg: 'Tournament not found.' });
-        }
+        if (!tournament) { return res.status(404).json({ msg: 'Tournament not found.' }); }
         
         const participantModel = tournament.participantsType;
         const fullTournament = await Tournament.findById(tournamentId)
@@ -59,20 +56,14 @@ router.post('/generate/:tournamentId', ...ADMIN_COORDINATOR_MIDDLEWARE, async (r
             }); 
 
         
-        if (fullTournament.status !== 'pending') {
-             return res.status(400).json({ msg: 'Cannot generate schedule. Tournament is not pending.' });
-        }
+        if (fullTournament.status !== 'pending') { return res.status(400).json({ msg: 'Cannot generate schedule. Tournament is not pending.' }); }
         
         const participants = fullTournament.registeredParticipants;
         const totalParticipants = participants.length;
         const maxParticipants = fullTournament.maxParticipants;
         
-        if (totalParticipants < 2) {
-            return res.status(400).json({ msg: 'Cannot generate schedule. Insufficient participants.' });
-        }
-
-        if (totalParticipants !== maxParticipants) {
-            return res.status(400).json({ msg: `Cannot generate schedule. Only ${totalParticipants}/${maxParticipants} participants registered.` });
+        if (totalParticipants < 2 || totalParticipants !== maxParticipants) {
+            return res.status(400).json({ msg: `Cannot generate schedule. Required: ${maxParticipants}, Registered: ${totalParticipants}.` });
         }
 
         if (fullTournament.participantsType === 'Team') {
@@ -82,6 +73,7 @@ router.post('/generate/:tournamentId', ...ADMIN_COORDINATOR_MIDDLEWARE, async (r
             }
         }
         
+        // --- MATCH GENERATION LOGIC (Simplified: Round Robin & Single Elimination) ---
         const matches = [];
         const baseVenue = fullTournament.venues[0] || 'TBD Venue';
         const baseDateTime = new Date(); 
@@ -90,18 +82,13 @@ router.post('/generate/:tournamentId', ...ADMIN_COORDINATOR_MIDDLEWARE, async (r
         let numParticipants = participantIDs.length;
         
         if (fullTournament.format === 'round robin') {
-            
             let teams = participantIDs;
-            if (numParticipants % 2 !== 0) {
-                teams.push(null);
-                numParticipants++;
-            }
+            if (numParticipants % 2 !== 0) { teams.push(null); numParticipants++; }
             
             const numRounds = numParticipants - 1; 
             const numMatchesPerRound = teams.length / 2;
             
             for (let round = 0; round < numRounds; round++) {
-                
                 for (let i = 0; i < numMatchesPerRound; i++) {
                     const teamA = teams[i];
                     const teamB = teams[teams.length - 1 - i]; 
@@ -117,7 +104,6 @@ router.post('/generate/:tournamentId', ...ADMIN_COORDINATOR_MIDDLEWARE, async (r
                         });
                     }
                 }
-
                 const fixedTeam = teams[0];
                 const rotatingTeams = teams.slice(1);
                 const lastRotatingTeam = rotatingTeams.pop(); 
@@ -125,13 +111,9 @@ router.post('/generate/:tournamentId', ...ADMIN_COORDINATOR_MIDDLEWARE, async (r
             }
 
         } else if (fullTournament.format === 'single elimination') {
-            
             const numTeams = participants.length;
-            
             let bracketSize = 2;
-            while (bracketSize < numTeams) {
-                bracketSize *= 2;
-            }
+            while (bracketSize < numTeams) { bracketSize *= 2; }
 
             const numByes = bracketSize - numTeams;
             const numFirstRoundMatches = numTeams - numByes;
@@ -142,7 +124,6 @@ router.post('/generate/:tournamentId', ...ADMIN_COORDINATOR_MIDDLEWARE, async (r
             else if (bracketSize === 8) { roundName = 'Quarterfinal'; } 
             else if (bracketSize === 16) { roundName = 'Round of 16'; } 
             else { roundName = 'Round 1'; }
-            
             
             if (numTeams === 2) {
                 matches.push({
@@ -155,8 +136,7 @@ router.post('/generate/:tournamentId', ...ADMIN_COORDINATOR_MIDDLEWARE, async (r
                     venue: baseVenue
                 });
             } else if (numFirstRoundMatches > 0) { 
-                
-                const scheduledTeams = participants.map(p => p._id).slice(0, numFirstRoundMatches);
+                const scheduledTeams = participants.map(p => p._id).slice(0, numFirstRoundMatches * 2); 
                 
                 for(let i = 0; i < scheduledTeams.length; i += 2) { 
                     const teamA = scheduledTeams[i];
@@ -179,10 +159,7 @@ router.post('/generate/:tournamentId', ...ADMIN_COORDINATOR_MIDDLEWARE, async (r
         } else {
             return res.status(400).json({ msg: `Scheduling for format '${fullTournament.format}' is not yet implemented.` });
         }
-
-        if (matches.length === 0 && totalParticipants > 1 && fullTournament.format !== 'round robin') { 
-             return res.status(400).json({ msg: `Schedule generation failed unexpectedly for ${totalParticipants} participants.` });
-        }
+        // --- END MATCH GENERATION LOGIC ---
         
         const savedMatches = matches.length > 0 ? await Match.insertMany(matches) : [];
         
@@ -201,31 +178,23 @@ router.post('/generate/:tournamentId', ...ADMIN_COORDINATOR_MIDDLEWARE, async (r
 });
 
 
-// @route   PUT /api/matches/:matchId/score (Unchanged)
+// @route   PUT /api/matches/:matchId/score
+// @access  Admin/Coordinator
 router.put('/:matchId/score', ...ADMIN_COORDINATOR_MIDDLEWARE, async (req, res) => {
     const { teamAscore, teamBscore, status } = req.body; 
     
-    // Console warning to remind you of the model structure difference
-    console.warn("Match Score PUT Route uses simple scoring structure, which conflicts with Match Model's scoreUpdates concept.");
-    
     try {
         const match = await Match.findById(req.params.matchId);
-        if (!match) {
-            return res.status(404).json({ msg: 'Match not found.' });
-        }
+        if (!match) { return res.status(404).json({ msg: 'Match not found.' }); }
         
-        // *** FIX APPLIED HERE ***
-        // 1. Write the scores to the correct path in the Mongoose document.
+        // CRITICAL FIX: Ensure the scores object is updated before saving
         match.scores = { teamA: teamAscore, teamB: teamBscore }; 
-        
-        // 2. Remove the invalid update attempt.
-        // NOTE: The previous code block was deleted here as it referenced a non-existent field.
-        // ************************
         
         match.status = status || 'completed';
         match.coordinatorId = req.user.id; 
 
-        await match.save(); // This now saves the scores correctly.
+        // IMPORTANT: The match.save() must complete
+        await match.save(); 
         
         res.json({ msg: 'Score updated successfully.', match });
 
@@ -234,6 +203,5 @@ router.put('/:matchId/score', ...ADMIN_COORDINATOR_MIDDLEWARE, async (req, res) 
         res.status(500).send('Server Error');
     }
 });
-
 
 module.exports = router;
