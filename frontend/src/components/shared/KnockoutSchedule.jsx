@@ -1,15 +1,15 @@
-// frontend/src/components/shared/KnockoutSchedule.jsx - FINAL CODE (Clean Column View)
+// frontend/src/components/shared/KnockoutSchedule.jsx - Simplified Column View with Advancement Logic
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import MatchCard from './MatchCard';
-// Import necessary styles from the dedicated style file
+import axios from 'axios'; 
 import { titleStyles, rrMatchCardStyles } from './TournamentStyles'; 
 
 
-// --- STYLES (Adjusted for stable column rendering) ---
+// --- STYLES (Reverted to simple column rendering styles) ---
 const bracketContainerStyles = {
     display: 'flex',
-    justifyContent: 'center', 
+    justifyContent: 'flex-start', 
     alignItems: 'flex-start',    
     padding: '20px',
     backgroundColor: '#1a1a1a', 
@@ -29,67 +29,91 @@ const roundColumnStyles = {
     padding: '0 40px 0 20px', 
     position: 'relative', 
     minWidth: '250px',
-};
-
-// --- HELPER LOGIC ---
-
-const getWinnerInfo = (match) => {
-    if (!match || match.status !== 'completed' || !match.scores) return { name: 'TBD', teamId: null }; 
-    
-    const scoreA = match.scores.teamA || 0;
-    const scoreB = match.scores.teamB || 0;
-    
-    if (scoreA > scoreB) return { name: match.teams[0]?.name || 'TBD', teamId: match.teams[0]?._id };
-    if (scoreB > scoreA) return { name: match.teams[1]?.name || 'TBD', teamId: match.teams[1]?._id };
-    return { name: 'TBD (Tie)', teamId: null }; 
+    flexShrink: 0, // Prevents columns from squishing on horizontal scroll
 };
 
 
-// --- MAIN KNOCKOUT COMPONENT (READ-ONLY VISUALIZATION) ---
+// --- HELPER FUNCTIONS (Simplified and Re-Included for Readability) ---
 
-const KnockoutSchedule = ({ tournamentData, matches, onScoreUpdate, isTournamentCompleted, maxParticipants }) => {
+// This helper is for local data processing/display logic
+const checkIfRoundIsCompleted = (matches) => {
+    return matches.every(match => match.status === 'completed');
+};
 
-    // Initialized as an Array
-    const [roundStructure, setRoundStructure] = useState([]); 
+// Defines the order of knockout rounds
+const getNextRoundName = (currentRoundName) => {
+    const order = ['Round 1', 'Round of 32', 'Round of 16', 'Quarterfinal', 'Semifinal', 'Final'];
+    const currentIndex = order.indexOf(currentRoundName);
+    return order[currentIndex + 1]; 
+};
 
-    // Process matches into rounds for visual structure
-    useEffect(() => {
-        if (!matches || matches.length === 0) {
-            setRoundStructure([]);
-            return;
+// Groups matches by round (Assuming this helper exists in your project or is implemented locally)
+const groupMatchesByRound = (matches) => {
+    if (!matches) return [];
+
+    const groups = matches.reduce((acc, match) => {
+        const roundName = match.round || 'Round 1'; 
+        if (!acc[roundName]) { acc[roundName] = []; }
+        acc[roundName].push(match);
+        return acc;
+    }, {});
+    
+    // Sort rounds based on the predefined order
+    const order = ['Round 1', 'Round of 32', 'Round of 16', 'Quarterfinal', 'Semifinal', 'Final'];
+    
+    return order.map(name => ({ 
+        name, 
+        matches: groups[name] || [] 
+    })).filter(round => round.matches.length > 0)
+       .map(round => ({ 
+           ...round, 
+           // Sort matches within each round (important for correct pairing in next round!)
+           matches: round.matches.sort((a, b) => (a.matchNumber || 0) - (b.matchNumber || 0))
+       }));
+};
+
+
+// --- MAIN KNOCKOUT COMPONENT ---
+
+const KnockoutSchedule = ({ tournamentData, matches, onScoreUpdate, isTournamentCompleted, maxParticipants, onUpdate }) => {
+    
+    const roundStructure = groupMatchesByRound(matches);
+    
+    // Identify the LAST round *with matches* that is not the final
+    const currentRound = roundStructure.slice(0, -1).findLast(round => round.matches.length > 0) || roundStructure.findLast(round => round.matches.length > 0);
+    
+    const isCurrentRoundCompleted = currentRound ? checkIfRoundIsCompleted(currentRound.matches) : false;
+    const canProceed = isCurrentRoundCompleted && currentRound && getNextRoundName(currentRound.name);
+
+    // --- API Handler to Proceed to Next Round ---
+    const handleProceedToNextRound = useCallback(async () => {
+        if (!canProceed || isTournamentCompleted) return;
+        
+        const currentRoundName = currentRound.name;
+        const nextRoundName = getNextRoundName(currentRoundName);
+        
+        if (!nextRoundName || nextRoundName === currentRoundName) {
+            return alert("Cannot proceed: No subsequent round defined or this is the final round.");
         }
+        
+        try {
+            // Note: This relies on the backend route implementation from the previous step.
+            await axios.post(`/api/matches/${tournamentData._id}/next-round`, {
+                currentRoundName,
+                nextRoundName,
+                expectedMatchCount: currentRound.matches.length
+            });
 
-        const groups = matches.reduce((acc, match) => {
-            const roundName = match.round || 'Round 1'; 
-            if (!acc[roundName]) { acc[roundName] = []; }
-            acc[roundName].push(match);
-            return acc;
-        }, {});
-        
-        // Define order for display
-        const order = ['Round 1', 'Round of 16', 'Quarterfinal', 'Semifinal', 'Final'];
-        
-        const sortedRounds = order.map(name => ({ name, matches: groups[name] || [] }))
-                                 .filter(round => round.matches.length > 0);
-        
-        setRoundStructure(sortedRounds);
+            alert(`Successfully created matches for ${nextRoundName}!`);
+            // Trigger a data refresh in the parent component
+            if (onUpdate) onUpdate(); 
 
-    }, [matches]);
-    
-    
-    const renderMatchesInRound = (roundMatches, isNextRound) => {
-        return roundMatches.map((match, index) => (
-             <div key={match._id} style={{ marginBottom: isNextRound ? '50px' : '10px' }}>
-                <MatchCard 
-                    match={match} 
-                    onScoreUpdate={() => alert("Please use the 'Fixtures (Score Entry)' tab to modify scores.")} 
-                    isTournamentCompleted={isTournamentCompleted} 
-                    isSingleElimination={true} 
-                    hasAdminRights={false} // FORCES READ-ONLY MODE
-                />
-            </div>
-        ));
-    };
+        } catch (error) {
+            console.error('Failed to generate next round:', error);
+            const errorMessage = error.response?.data?.message || 'Failed to communicate with server.';
+            alert(`Error processing next round: ${errorMessage}`);
+        }
+    }, [canProceed, currentRound, tournamentData._id, isTournamentCompleted, onUpdate]);
 
 
     return (
@@ -101,12 +125,36 @@ const KnockoutSchedule = ({ tournamentData, matches, onScoreUpdate, isTournament
                     <h3 style={{...titleStyles, paddingBottom: '0', marginBottom: '10px'}}>{round.name}</h3>
                     
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
-                         {renderMatchesInRound(round.matches, roundIndex > 0)}
+                         {round.matches.map((match) => (
+                             <div key={match._id} style={{ padding: 0 }}>
+                                <MatchCard 
+                                    match={match} 
+                                    onScoreUpdate={onScoreUpdate} 
+                                    isTournamentCompleted={isTournamentCompleted} 
+                                    isSingleElimination={true} 
+                                    hasAdminRights={false} // FORCES READ-ONLY MODE
+                                    // Removed dynamic styling logic
+                                />
+                            </div>
+                        ))}
                          
-                         {/* Placeholder for the visual feeder into the next round */}
-                         {(roundIndex < roundStructure.length - 1) && (
-                            <div style={{ paddingBottom: '40px' }}>
-                                <p style={{ margin: 0, fontSize: '0.8em', color: '#39ff14' }}>— ADVANCES —</p>
+                         {/* Button to Proceed to Next Round */}
+                         {(currentRound && round.name === currentRound.name && canProceed && !isFinalRound) && (
+                            <div style={{ paddingTop: '20px', width: '100%', textAlign: 'center' }}>
+                                <button 
+                                    onClick={handleProceedToNextRound}
+                                    style={{
+                                        padding: '8px 15px',
+                                        backgroundColor: '#39ff14', 
+                                        color: '#1a1a1a',
+                                        fontWeight: 'bold',
+                                        border: 'none',
+                                        borderRadius: '5px',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    🏆 Proceed to {getNextRoundName(currentRound.name)}
+                                </button>
                             </div>
                          )}
                     </div>

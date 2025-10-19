@@ -1,14 +1,15 @@
-// frontend/src/components/admin/CreateTournamentForm.jsx
+// frontend/src/components/admin/CreateTournamentForm.jsx - FINAL CORRECTED CODE (Using SPORT_LIST & Removed Unwanted Features)
 
 import React, { useState } from 'react';
 import axios from 'axios';
+import { SPORT_LIST } from '../../data/sportConstants'; // FIX: Import the centralized list
 
 // Helper function for Single Elimination validation (moved from Dashboard)
 const isPowerOfTwo = (n) => {
     return n && (n & (n - 1)) === 0;
 };
 
-// --- STYLES (Copied from Dashboard) ---
+// --- STYLES (Kept for reference) ---
 const formContainerStyles = { backgroundColor: '#1a1a1a', padding: '30px', borderRadius: '10px' };
 const inputGroupStyles = { marginBottom: '15px' };
 const labelStyles = { display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#e0e0e0' };
@@ -22,10 +23,9 @@ const successStyles = { color: '#00ffaa', marginTop: '10px' };
 const CreateTournamentForm = ({ setView, token }) => {
     const [formData, setFormData] = useState({
         name: '', sport: 'football', format: 'single elimination', 
-        startDate: '', endDate: '',
-        datesRequired: false, 
         participantsType: 'Team', maxParticipants: 4, playersPerTeam: 5, 
-        liveScoreEnabled: false, venueType: 'off', venues: '',
+        liveScoreEnabled: false, 
+        venueType: 'off', venues: '',
     });
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
@@ -43,7 +43,6 @@ const CreateTournamentForm = ({ setView, token }) => {
 
         if (type === 'checkbox') { newValue = checked; }
         if (name === 'participantsType' && newValue === 'Player') { setFormData(prev => ({ ...prev, participantsType: 'Player', playersPerTeam: 0 })); return; }
-        if (name === 'datesRequired' && newValue === false) { setFormData(prev => ({ ...prev, datesRequired: false, startDate: '', endDate: '' })); return; }
 
         setFormData({ ...formData, [name]: newValue, });
         setError('');
@@ -59,14 +58,12 @@ const CreateTournamentForm = ({ setView, token }) => {
 
         if (formData.participantsType === 'Team' && (!formData.playersPerTeam || formData.playersPerTeam < 1)) { setError('Please specify the number of players per team.'); return; }
         if (formData.maxParticipants < 2) { setError('Minimum 2 participants (teams or players) required.'); return; }
-        if (formData.datesRequired && (!formData.startDate || !formData.endDate)) { setError('Start and End dates are required for scheduled tournaments.'); return; }
 
         const dataToSubmit = {
             ...formData,
-            startDate: formData.datesRequired ? formData.startDate : undefined, 
-            endDate: formData.datesRequired ? formData.endDate : undefined, 
             playersPerTeam: formData.participantsType === 'Team' ? formData.playersPerTeam : undefined,
             venues: formData.venueType === 'multi' ? formData.venues.split(',').map(v => v.trim()) : (formData.venueType === 'single' ? [formData.venues] : []),
+            liveScoreEnabled: false,
         };
 
         try {
@@ -90,7 +87,8 @@ const CreateTournamentForm = ({ setView, token }) => {
                     <div style={{...inputGroupStyles, flex: 1}}>
                         <label style={labelStyles} htmlFor="sport">Sport Type</label>
                         <select style={selectStyles} id="sport" name="sport" value={formData.sport} onChange={handleChange} required>
-                            {['football', 'cricket', 'badminton', 'volleyball', 'basketball', 'table tennis', 'esports', 'other'].map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+                            {/* FIX: Use the imported SPORT_LIST for consistency */}
+                            {SPORT_LIST.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
                         </select>
                     </div>
                     <div style={{...inputGroupStyles, flex: 1}}>
@@ -125,22 +123,14 @@ const CreateTournamentForm = ({ setView, token }) => {
                     {formData.participantsType === 'Team' && (<div style={{...inputGroupStyles, flex: 1}}><label style={labelStyles} htmlFor="playersPerTeam">Players Per Team</label><input style={inputStyles} type="number" id="playersPerTeam" name="playersPerTeam" value={formData.playersPerTeam} onChange={handleChange} required min="1" /></div>)}
                 </div>
                 
-                <div style={inputGroupStyles}>
-                    <label style={labelStyles}><input type="checkbox" name="datesRequired" checked={formData.datesRequired} onChange={handleChange} style={{ marginRight: '10px' }}/>Require Specific Start/End Dates (Uncheck if dates are NOT needed)</label>
-                </div>
-                
-                {formData.datesRequired && (
-                    <div style={{ display: 'flex', gap: '20px' }}>
-                        <div style={inputGroupStyles}><label style={labelStyles} htmlFor="startDate">Start Date</label><input style={inputStyles} type="date" id="startDate" name="startDate" value={formData.startDate} onChange={handleChange} required={formData.datesRequired} /></div>
-                        <div style={inputGroupStyles}><label style={labelStyles} htmlFor="endDate">End Date</label><input style={inputStyles} type="date" id="endDate" name="endDate" value={formData.endDate} onChange={handleChange} required={formData.datesRequired} /></div>
-                    </div>
-                )}
+                {/* DATE FIELDS REMOVED */}
 
                 <div style={inputGroupStyles}><label style={labelStyles} htmlFor="venueType">Venue Type</label><select style={selectStyles} id="venueType" name="venueType" value={formData.venueType} onChange={handleChange} required><option value="off">No Venue</option><option value="single">Single Venue</option><option value="multi">Multiple Venues</option></select></div>
                 
                 {(formData.venueType !== 'off') && (<div style={inputGroupStyles}><label style={labelStyles} htmlFor="venues">Venue Name(s)</label><input style={inputStyles} type="text" id="venues" name="venues" placeholder={formData.venueType === 'single' ? 'e.g., College Ground' : 'e.g., Venue A, Venue B, Venue C (comma separated)'} value={formData.venues} onChange={handleChange} required /></div>)}
-                <div style={inputGroupStyles}><label style={labelStyles}><input type="checkbox" name="liveScoreEnabled" checked={formData.liveScoreEnabled} onChange={handleChange} style={{ marginRight: '10px' }}/>Enable Real-Time Live Scoring</label></div>
                 
+                {/* LIVE SCORE CHECKBOX REMOVED */}
+
                 <button type="submit" style={submitButtonStyles} disabled={!!bracketError}>Create Tournament</button>
                 
                 {error && <p style={errorStyles}>Error: {error}</p>}

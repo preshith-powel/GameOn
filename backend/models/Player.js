@@ -1,4 +1,4 @@
-// backend/models/Player.js
+// backend/models/Player.js - FINAL CORRECTED CODE (Added statusCode to error returns)
 
 const mongoose = require('mongoose');
 
@@ -14,13 +14,8 @@ const playerSchema = new mongoose.Schema({
         required: false,
     },
     stats: {
-        // ... (Your existing stats fields) ...
         wins: { type: Number, default: 0 },
         losses: { type: Number, default: 0 },
-        goals: { type: Number, default: 0 },
-        assists: { type: Number, default: 0 },
-        runs: { type: Number, default: 0 },
-        wickets: { type: Number, default: 0 },
     },
     teamId: {
         type: mongoose.Schema.Types.ObjectId,
@@ -36,17 +31,20 @@ playerSchema.statics.checkOwner = async function (playerId, managerUserId) {
     const player = await this.findById(playerId).populate('teamId');
     
     if (!player) {
-        return { error: 'Player not found.' };
+        // FIX: Return explicit 404 Not Found
+        return { error: 'Player not found.', statusCode: 404 }; 
     }
 
     // Ensure the player is linked to a team
     if (!player.teamId) {
-        return { error: 'Player is not linked to a team.' };
+        // FIX: Return 400 Bad Request if the player object is structurally invalid
+        return { error: 'Player is not linked to a team.', statusCode: 400 }; 
     }
 
     // Check if the team's managerId matches the requesting managerUserId
     if (player.teamId.managerId.toString() !== managerUserId.toString()) {
-        return { error: 'Unauthorized: You do not manage this player or team.' };
+        // FIX: Return 403 Forbidden/Unauthorized
+        return { error: 'Unauthorized: You do not manage this player or team.', statusCode: 403 }; 
     }
 
     return { player: player };

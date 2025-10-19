@@ -1,4 +1,4 @@
-// backend/models/Team.js - FULL UPDATED CODE (Removed unique constraint from managerId)
+// backend/models/Team.js - FINAL CORRECTED CODE (Added 'other' to sportType enum)
 
 const mongoose = require('mongoose');
 
@@ -6,6 +6,14 @@ const teamSchema = new mongoose.Schema({
     name: {
         type: String,
         required: true,
+        trim: true
+    },
+    // FIX 1: CRITICAL FIELD ADDED to link the team to one of your five sports
+    sportType: {
+        type: String,
+        required: true,
+        // FIX: Added 'other' for consistency with Tournament model
+        enum: ['football', 'cricket', 'badminton', 'volleyball', 'multi', 'other'], 
         trim: true
     },
     managerId: {

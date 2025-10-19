@@ -1,4 +1,4 @@
-// backend/middleware/auth.js - FULL UPDATED CODE (Final Auth Export Fix)
+// backend/middleware/auth.js - FINAL CORRECTED CODE (Cleaned checkRole function)
 
 const jwt = require('jsonwebtoken');
 
@@ -20,10 +20,9 @@ const protect = (req, res, next) => {
 };
 
 // Middleware 2: Returns a function that checks for a specific role
-const checkRole = (roles) => (req, res, next) => {
-    if (typeof roles === 'string') {
-        roles = [roles];
-    }
+const checkRole = (...roles) => (req, res, next) => {
+    // FIX: Removed the redundant 'if (typeof roles === "string")' check.
+    // The '...roles' rest parameter ensures 'roles' is already an array.
     
     if (!req.user || !roles.includes(req.user.role)) {
         return res.status(403).json({ 
@@ -37,5 +36,7 @@ const checkRole = (roles) => (req, res, next) => {
 module.exports = {
     protect,
     checkRole,
-    admin: [protect, checkRole('admin')] 
+    admin: [protect, checkRole('admin')], 
+    manager: [protect, checkRole('manager')], 
+    coordinator: [protect, checkRole('coordinator')] 
 };

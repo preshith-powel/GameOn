@@ -1,4 +1,4 @@
-// frontend/src/components/admin/TournamentList.jsx - FINAL CORRECTED CODE
+// frontend/src/components/admin/TournamentList.jsx - FINAL CORRECTED CODE (Token Check Refinement)
 
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
@@ -35,29 +35,34 @@ const getStatusColor = (status) => {
 };
 
 // --- COMPONENT START ---
-const TournamentList = ({ setView, setSelectedTournament }) => {
+const TournamentList = ({ setView, setSelectedTournament, token }) => { // Rely on the token prop from AdminDashboard
     const navigate = useNavigate(); 
-    const token = getAdminToken();
     const [tournaments, setTournaments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
     const fetchAllTournaments = async () => {
-        if (!token) { setError('Authentication required to view tournaments.'); setLoading(false); return; }
+        const authToken = token || getAdminToken(); // Fallback check
+        if (!authToken) { setError('Authentication token is missing.'); setLoading(false); return; }
+        
         setLoading(true);
         try {
-            const res = await axios.get('http://localhost:5000/api/tournaments', { headers: { 'x-auth-token': token } });
+            const res = await axios.get('http://localhost:5000/api/tournaments', { 
+                headers: { 'x-auth-token': authToken } // Use the retrieved token
+            });
             setTournaments(res.data);
             setLoading(false);
         } catch (err) {
-            setError('Failed to fetch tournaments. Token may be invalid or expired.');
+            // FIX: Ensure the 401 error is clearly translated for the user
+            const errMsg = err.response?.status === 401 ? 'Session expired or token invalid. Please log in again.' : (err.response?.data?.msg || 'Failed to fetch tournaments.');
+            setError(errMsg);
             setLoading(false);
             console.error(err);
         }
     };
 
     useEffect(() => {
-        // NOTE: setView is now included in dependencies to properly trigger refresh
+        // Re-fetch when the component is viewed
         fetchAllTournaments();
     }, [token, setView]); 
 
@@ -71,9 +76,12 @@ const TournamentList = ({ setView, setSelectedTournament }) => {
             return;
         }
 
+        const authToken = token || getAdminToken();
+        if (!authToken) { alert("Session expired. Please log in."); return; }
+
         try {
             await axios.delete(`http://localhost:5000/api/tournaments/${tournamentId}`, { 
-                headers: { 'x-auth-token': token } 
+                headers: { 'x-auth-token': authToken } 
             });
             alert(`Tournament '${name}' deleted successfully.`);
             fetchAllTournaments(); 
@@ -137,7 +145,6 @@ const TournamentList = ({ setView, setSelectedTournament }) => {
                                     Status: 
                                     <span style={{ color: getStatusColor(displayStatus), marginLeft: '5px', fontWeight: 'bold' }}>
                                         {displayStatus} 
-                                        {/* FIX: Conditionally render checkmark */}
                                         {isCompleted && ' ✅'} 
                                     </span>
                                 </p>

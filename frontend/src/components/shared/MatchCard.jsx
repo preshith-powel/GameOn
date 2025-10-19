@@ -1,133 +1,125 @@
-// frontend/src/components/shared/MatchCard.jsx - FINAL CODE (Green Highlight & Hide Scores)
+// frontend/src/components/shared/MatchCard.jsx - FINAL CORRECTED CODE (Dynamic Multi-Sport Loader)
 
 import React, { useState, useEffect } from 'react';
-// Import all styles from the dedicated style file
+// FIX: Corrected the import path for the Cricket Scorecard.
 import { 
-    updateButtonStyles, disabledButtonStyles, editButtonStyles, rrUpdateBtnStyles, rrMatchCardStyles, rrTeamRowStyles, rrScoreInputStyles, scoreFieldStyles 
+    updateButtonStyles, disabledButtonStyles, editButtonStyles, rrUpdateBtnStyles, rrMatchCardStyles, rrTeamRowStyles, scoreFieldStyles 
 } from './TournamentStyles'; 
+import { SPORT_CONSTANTS } from '../../data/sportConstants';
+
+// --- Import All Scorecard Components (FIX 2) ---
+// You MUST create these files as placeholders!
+import FootballScorecard from './FootballScorecard'; 
+import CricketScorecard from './CricketScorecard'; // FIX 1: Removed duplicate '
+import BadmintonScorecard from './BadmintonScorecard';
+import VolleyballScorecard from './VolleyballScorecard';
+import MultiSportScorecard from './MultiSportScorecard';
+
+// --- Component Map ---
+const ScorecardComponentMap = {
+    FootballScorecard: FootballScorecard,
+    CricketScorecard: CricketScorecard,
+    BadmintonScorecard: BadmintonScorecard,
+    VolleyballScorecard: VolleyballScorecard,
+    MultiSportScorecard: MultiSportScorecard,
+};
+
+// Default MatchCard (simple TBD or error state)
+const DefaultScorecard = () => (
+    <div style={{ padding: '10px', color: '#ff6b6b' }}>Scorecard Not Found or Not Implemented.</div>
+);
+
 
 const MatchCard = ({ match, onScoreUpdate, isTournamentCompleted, isSingleElimination = false, hasAdminRights = false }) => {
     
-    // isVisualization is TRUE if single elimination is active AND we don't have scoring rights (read-only map)
-    const isVisualization = isSingleElimination && !hasAdminRights; 
-    
-    if (!match.teams || match.teams.length < 2) {
+    // --- FIX 2: Access data from the CORRECT flexible model ---
+    if (!match.participants || match.participants.length < 2) { // CRITICAL FIX
         return <div style={{...rrMatchCardStyles, color: '#ff6b6b'}}>Error: Missing Participant Data for Match ID: {match._id}</div>;
     }
+
+    const participantA = match.participants[0];
+    const participantB = match.participants[1];
     
+    // Get the sport type and determine the correct scorecard component name
+    const sportType = match.sportType || 'other';
+    const scorecardName = SPORT_CONSTANTS[sportType]?.scorecardComponent;
+    const DynamicScorecard = ScorecardComponentMap[scorecardName] || DefaultScorecard;
+
     const isCompleted = match.status === 'completed'; 
-    const [scoreA, setScoreA] = useState(match.scores?.teamA ?? '');
-    const [scoreB, setScoreB] = useState(match.scores?.teamB ?? '');
-    
+    const isVisualization = isSingleElimination && !hasAdminRights; 
     const isEditable = !isVisualization && hasAdminRights;
 
     const [isEditing, setIsEditing] = useState(isEditable && !isCompleted && !isTournamentCompleted); 
-    
-    // EFFECT: Reset local state when the match prop changes (i.e., when data is refetched)
+
+    // Sync state when the match prop changes
     useEffect(() => {
-        setScoreA(match.scores?.teamA ?? '');
-        setScoreB(match.scores?.teamB ?? '');
         setIsEditing(isEditable && !isCompleted && !isTournamentCompleted);
-    }, [match.scores, isCompleted, isTournamentCompleted, isEditable]);
+    }, [match.status, isCompleted, isTournamentCompleted, isEditable]);
     
-    
-    const handleSave = () => {
+    // --- FIX 3: New handleSave that uses flexible scoreDataObject ---
+    const handleSave = (scoreDataObject) => { // CRITICAL FIX: Expects scoreDataObject
         if (!isEditable || isTournamentCompleted) return;
         
-        if (scoreA === '' || scoreB === '' || scoreA === null || scoreB === null) {
-            console.error("Please enter a score in both fields before saving.");
-            return;
-        }
-
-        const a = parseInt(scoreA);
-        const b = parseInt(scoreB);
-        
-        if (isNaN(a) || isNaN(b)) {
-            console.error("Please enter valid numbers for both scores.");
-            return;
-        }
-
-        onScoreUpdate(match._id, a, b); 
+        // This function passes the flexible scoreData object to the parent/API caller
+        // The parent component should then call the backend: onScoreUpdate(match._id, { scoreData: scoreDataObject, status: 'completed' });
+        onScoreUpdate(match._id, { scoreData: scoreDataObject, status: 'completed' }); // CRITICAL FIX: Pass object
+        setIsEditing(false); // Close edit mode after saving
     };
     
     const handleEditClick = () => {
         if (!isEditable || isTournamentCompleted) return;
-        setScoreA(match.scores?.teamA ?? 0);
-        setScoreB(match.scores?.teamB ?? 0);
         setIsEditing(true);
     };
 
     const handleCancelClick = () => {
-        setScoreA(match.scores?.teamA ?? '');
-        setScoreB(match.scores?.teamB ?? '');
         setIsEditing(false);
     };
     
-    const finalScoreDisplayA = match.scores?.teamA ?? 0;
-    const finalScoreDisplayB = match.scores?.teamB ?? 0;
-
-    const isWinnerA = isCompleted && finalScoreDisplayA > finalScoreDisplayB;
-    const isWinnerB = isCompleted && finalScoreDisplayB > finalScoreDisplayA;
+    // Check if the current user is the winner based on the updated match model
+    const isWinnerA = isCompleted && participantA.isWinner;
+    const isWinnerB = isCompleted && participantB.isWinner;
 
     const matchCardStyle = isSingleElimination ? { ...rrMatchCardStyles, padding: '10px', marginBottom: '10px' } : rrMatchCardStyles;
 
 
     return (
         <div style={matchCardStyle}>
-            {/* Player 1 Row / Score Display */}
-            <div style={rrTeamRowStyles(isWinnerA)}>
-                <span style={{fontWeight: isWinnerA ? 'bold' : '500', marginRight: '20px'}}>{match.teams[0]?.name || 'Player 1'}</span>
+            <div style={{display: 'flex', flexDirection: 'column'}}>
                 
-                {/* --- SCORE DISPLAY AREA --- */}
-                <div style={rrScoreInputStyles}>
-                    {isVisualization ? (
-                        // Visualization Mode: Hide scores completely
-                        <span style={{width: '60px', textAlign: 'center'}}></span>
-                    ) : isEditing && isEditable ? (
-                        // Score Entry Mode (Editing): Show Input Fields
-                        <>
-                            <input type="number" min="0" style={scoreFieldStyles} value={scoreA} onChange={(e) => setScoreA(e.target.value)} disabled={isTournamentCompleted} />
-                            <span style={{ color: '#a0a0a0' }}>-</span>
-                            <input type="number" min="0" style={scoreFieldStyles} value={scoreB} onChange={(e) => setScoreB(e.target.value)} disabled={isTournamentCompleted} />
-                        </>
-                    ) : (
-                         // Score Entry Mode (Read-Only): Show Scores
-                        <>
-                            <span style={{...scoreFieldStyles, backgroundColor: 'transparent', border: 'none', color: isWinnerA ? '#39ff14' : '#e0e0e0' }}>{finalScoreDisplayA}</span>
-                            <span style={{ color: '#a0a0a0' }}>-</span>
-                            <span style={{...scoreFieldStyles, backgroundColor: 'transparent', border: 'none', color: isWinnerB ? '#39ff14' : '#e0e0e0' }}>{finalScoreDisplayB}</span>
-                        </>
-                    )}
-                </div>
-                
-                <span style={{fontWeight: isWinnerB ? 'bold' : '500', marginLeft: '20px'}}>{match.teams[1]?.name || 'Player 2'}</span>
-            </div>
-            
-            {/* Action Row - Hidden for visualization mode */}
-            {!isVisualization && (
-                <div style={{display: 'flex', justifyContent: 'flex-end', marginTop: '5px', gap: '10px'}}>
-                    {isEditing && isEditable ? (
-                        <>
-                            <button style={{...editButtonStyles, backgroundColor: '#ff6b6b'}} onClick={handleCancelClick}>
-                                Cancel
-                            </button>
-                            <button style={isTournamentCompleted ? disabledButtonStyles : rrUpdateBtnStyles} onClick={handleSave} disabled={isTournamentCompleted}>
-                                Save Score
-                            </button>
-                        </>
-                    ) : (
-                        isCompleted ? (
-                            <button style={isTournamentCompleted ? disabledButtonStyles : editButtonStyles} onClick={handleEditClick} disabled={isTournamentCompleted}>
-                                Edit Score
-                            </button>
+                {/* --- Dynamic Scorecard Component --- */}
+                <DynamicScorecard
+                    participantA={participantA}
+                    participantB={participantB}
+                    isEditing={isEditing}
+                    isCompleted={isCompleted}
+                    isVisualization={isVisualization}
+                    onSave={handleSave} // Pass the save handler down
+                />
+
+                {/* Action Row - Hidden for visualization mode */}
+                {!isVisualization && (
+                    <div style={{display: 'flex', justifyContent: 'flex-end', marginTop: '5px', gap: '10px'}}>
+                        {isEditing && isEditable ? (
+                            <>
+                                <button style={{...editButtonStyles, backgroundColor: '#ff6b6b'}} onClick={handleCancelClick}>
+                                    Cancel
+                                </button>
+                                {/* Removed the general Save Score button to force use of the specific scorecard's save button */}
+                            </>
                         ) : (
-                            <button style={isTournamentCompleted ? disabledButtonStyles : rrUpdateBtnStyles} onClick={handleEditClick} disabled={isTournamentCompleted}>
-                                Enter Score
-                            </button>
-                        )
-                    )}
-                </div>
-            )}
+                            isEditable && (
+                                <button 
+                                    style={isTournamentCompleted ? disabledButtonStyles : editButtonStyles} 
+                                    onClick={handleEditClick} 
+                                    disabled={isTournamentCompleted || isEditing}
+                                >
+                                    {isCompleted ? 'Edit Score' : 'Enter Score'}
+                                </button>
+                            )
+                        )}
+                    </div>
+                )}
+            </div>
         </div>
     );
 };

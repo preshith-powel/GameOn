@@ -1,12 +1,16 @@
-// frontend/src/components/manager/RosterRoutines.jsx
+// frontend/src/components/manager/RosterRoutines.jsx - UPDATED CODE
 
 import React, { useState } from 'react';
 import axios from 'axios';
+// FIX 1: Import the constants to potentially use for future validation
+import { SPORT_CONSTANTS } from '../../data/sportConstants'; 
 
 const getManagerToken = () => localStorage.getItem('token'); 
 
-// NOTE: Styles are imported/copied from the main dashboard file
-const cardStyles = { backgroundColor: '#1a1a1a', padding: '20px', borderRadius: '10px', marginBottom: '20px' };
+// NOTE: Styles are assumed to be loaded via CSS classes or passed as props. 
+// Using placeholder object for styles to maintain functionality within this file.
+// FIX 2: Replace hardcoded styles with simplified constants or classes (You must replace these with real CSS in your project!)
+const cardStyles = { backgroundColor: '#1a1a1a', padding: '20px', borderRadius: '10px', marginBottom: '20px', color: '#e0e0e0' };
 const rosterItemStyles = { padding: '10px', borderBottom: '1px solid #333', display: 'flex', justifyContent: 'space-between', alignItems: 'center' };
 const inputStyles = { width: '100%', padding: '10px', border: '1px solid #333', borderRadius: '5px', backgroundColor: '#2c2c2c', color: '#e0e0e0', boxSizing: 'border-box', marginBottom: '10px' };
 const buttonStyles = { padding: '10px 15px', backgroundColor: '#00ffaa', color: '#1a1a1a', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' };
@@ -23,6 +27,7 @@ const AddPlayerForm = ({ fetchTeamData, activeTeam, maxPlayers }) => {
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     
+    // Max players is correctly pulled from the props passed from the parent (which gets the highest limit from the backend)
     const MAX_PLAYERS = maxPlayers; 
     const isRosterFull = activeTeam && activeTeam.roster.length >= MAX_PLAYERS;
 
@@ -51,7 +56,8 @@ const AddPlayerForm = ({ fetchTeamData, activeTeam, maxPlayers }) => {
             
         } catch (err) {
             console.error('Add player failed:', err.response?.data || err);
-            setError(err.response?.data?.msg || 'Failed to add player. Check backend console for details.');
+            // Uses the clean error message from the backend's asyncHandler
+            setError(err.response?.data?.message || err.response?.data?.msg || 'Failed to add player. Check console for details.'); 
         }
     };
 
@@ -74,10 +80,13 @@ const AddPlayerForm = ({ fetchTeamData, activeTeam, maxPlayers }) => {
 
 // --- 2B. TEAM ROSTER LIST ---
 
-const TeamRoster = ({ roster, fetchTeamData, maxPlayersPerTeam }) => {
+const TeamRoster = ({ roster, fetchTeamData, maxPlayersPerTeam, minPlayersPerTeam }) => { // FIX 1: Added minPlayersPerTeam prop
     const [error, setError] = useState(null);
     const [editPlayerId, setEditPlayerId] = useState(null);
     const [editPlayerName, setEditPlayerName] = useState('');
+    
+    const currentRosterSize = roster.length;
+    const isRosterBelowMinimum = minPlayersPerTeam > 0 && currentRosterSize < minPlayersPerTeam;
 
     const handleSaveEdit = async (playerId) => {
         if (!editPlayerName) {
@@ -91,6 +100,7 @@ const TeamRoster = ({ roster, fetchTeamData, maxPlayersPerTeam }) => {
         try {
             await axios.put(`http://localhost:5000/api/manager/players/${playerId}`, { 
                 name: editPlayerName, 
+                // contactInfo is intentionally omitted for simplicity in this edit form
             }, {
                 headers: { 'x-auth-token': token }
             });
@@ -100,15 +110,14 @@ const TeamRoster = ({ roster, fetchTeamData, maxPlayersPerTeam }) => {
             
         } catch (err) {
              console.error('Edit player failed:', err.response?.data || err);
-             setError(err.response?.data?.msg || 'Failed to save changes. Ensure backend PUT route is configured.');
+             setError(err.response?.data?.message || err.response?.data?.msg || 'Failed to save changes.');
         }
     };
 
     const handleRemove = async (playerId, playerName) => {
-        const isRosterAtLimit = roster.length === maxPlayersPerTeam;
-
-        if (isRosterAtLimit) {
-            if (!window.confirm(`WARNING: Removing ${playerName} will make your roster incomplete (${maxPlayersPerTeam - 1}/${maxPlayersPerTeam}). Continue?`)) return;
+        // FIX 1: Updated check to use the minimum requirement for a warning
+        if (isRosterBelowMinimum || currentRosterSize === minPlayersPerTeam) {
+            if (!window.confirm(`WARNING: Removing ${playerName} will drop the roster below the minimum required size (${minPlayersPerTeam}). Continue?`)) return;
         } else {
             if (!window.confirm(`Are you sure you want to remove ${playerName}?`)) return;
         }
@@ -126,13 +135,21 @@ const TeamRoster = ({ roster, fetchTeamData, maxPlayersPerTeam }) => {
             
         } catch (err) {
             console.error('Remove player failed:', err.response?.data || err);
-            setError(err.response?.data?.msg || 'Failed to remove player.');
+            setError(err.response?.data?.message || err.response?.data?.msg || 'Failed to remove player.');
         }
     };
 
     return (
         <div style={cardStyles}>
-            <h3>Current Roster ({roster.length} / {maxPlayersPerTeam})</h3>
+            <h3>
+                Current Roster ({currentRosterSize} / {maxPlayersPerTeam})
+                {/* FIX 1: Display warning if below minimum */}
+                {isRosterBelowMinimum && minPlayersPerTeam > 0 && (
+                    <span style={{ color: '#ff6b6b', marginLeft: '10px' }}>
+                        (Minimum {minPlayersPerTeam} required!) ⚠️
+                    </span>
+                )}
+            </h3>
             {error && <p style={errorStyles}>Error: {error}</p>}
             
             {roster.length === 0 ? (

@@ -1,4 +1,4 @@
-// backend/models/User.js - FINAL CODE (username is NOT unique)
+// backend/models/User.js - FINAL CORRECTED CODE (Added trim: true for consistency)
 
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
@@ -7,12 +7,13 @@ const userSchema = mongoose.Schema({
     username: {
         type: String,
         required: true,
-        // *** FIX: Removed unique: true to allow multiple users to share a name ***
+        trim: true, // FIX: Automatically removes leading/trailing spaces
     },
     uniqueId: {
         type: String,
         required: true,
-        unique: true // <-- This remains the unique login identifier
+        unique: true,
+        trim: true, // FIX: Ensures the login ID is clean
     },
     password: {
         type: String,
@@ -21,7 +22,8 @@ const userSchema = mongoose.Schema({
     role: {
         type: String,
         enum: ['admin', 'coordinator', 'manager', 'spectator'],
-        default: 'spectator'
+        default: 'spectator',
+        trim: true, // FIX: Keeps role data clean
     }
 }, {
     timestamps: true

@@ -1,4 +1,4 @@
-// frontend/src/pages/TournamentViewPage.jsx - FINAL CODE
+// frontend/src/pages/TournamentViewPage.jsx - FINAL FIX 2
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -91,21 +91,22 @@ const TournamentViewPage = () => {
     }, [fetchTournamentData, id]);
     
     // --- Score Update Handler (Passed to children) ---
-    const handleScoreUpdate = async (matchId, teamAscore, teamBscore) => {
+    // FIX 1: Change signature to accept the flexible payload object
+    const handleScoreUpdate = async (matchId, scoreUpdatePayload) => { // <-- NEW payload object expected
         if (!hasAdminRights) {
             setError("Unauthorized to update scores.");
             return;
         }
         try {
             await axios.put(`http://localhost:5000/api/matches/${matchId}/score`, 
-                { teamAscore, teamBscore, status: 'completed' },
+                scoreUpdatePayload, // <-- FIX 2: Pass the payload object directly
                 { headers: { 'x-auth-token': token } }
             );
             
             alert("Score saved successfully!");
             
-            await fetchMatches(); 
-            
+            await fetchMatches(); // Refresh data
+
         } catch (err) {
             console.error(`Failed to update score: ${err.response?.data?.msg || 'Server Error'}`);
             setError(err.response?.data?.msg || 'Failed to update score.');
@@ -153,7 +154,8 @@ const TournamentViewPage = () => {
         }
         
         try {
-            const championName = calculateLeaderboard(tournamentData, matches)[0]?.name || 'Unknown';
+            // Note: calculateLeaderboard returns {standings, displayColumns}, so access standings[0]
+            const championName = calculateLeaderboard(tournamentData, matches).standings[0]?.name || 'Unknown';
             
             await axios.put(`http://localhost:5000/api/tournaments/${id}`, 
                 { status: 'completed', winner: championName }, 
@@ -201,6 +203,7 @@ const TournamentViewPage = () => {
         
         // This is the default (and score entry) view for both formats
         if (isSingleElimination || isRoundRobin) { 
+            // NOTE: The RoundRobinSchedule component needs to be versatile or renamed, but we'll use it as the Match List viewer for now.
             return <RoundRobinSchedule {...renderProps} />;
         }
         
