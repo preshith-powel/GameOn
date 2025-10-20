@@ -26,6 +26,8 @@ const CreateTournamentForm = ({ setView, token }) => {
         name: '',
         sport: 'football',
         format: 'single elimination',
+        // startDate: '',
+        // endDate: '',
         participantsType: 'Team',
         maxParticipants: 4,
         playersPerTeam: 5,
@@ -167,6 +169,8 @@ const CreateTournamentForm = ({ setView, token }) => {
 
         const dataToSubmit = {
             ...formData,
+            // startDate: formData.startDate,
+            // endDate: formData.endDate,
             maxParticipants: formData.format === 'group stage' ? (formData.numGroups * formData.teamsPerGroup) : formData.maxParticipants,
             playersPerTeam: formData.participantsType === 'Team' ? formData.playersPerTeam : undefined,
             numEvents: formData.sport === 'multi-sport' ? formData.numEvents : undefined,

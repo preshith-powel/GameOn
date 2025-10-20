@@ -12,10 +12,10 @@ import AdminDashboard from './pages/AdminDashboard';
 import ManagerDashboard from './pages/ManagerDashboard'; 
 import TournamentViewPage from './pages/TournamentViewPage'; // Corrected import name
 import CoordinatorDashboard from './pages/CoordinatorDashboard';
-//import SpectatorDashboard from './pages/SpectatorDashboard';
+import SpectatorDashboard from './pages/SpectatorDashboard';
 // Placeholder for other Dashboards (used in App.jsx for routing)
 //const CoordinatorDashboard = () => <div className="container" style={{padding: '20px', color: '#fff'}}><h1>Coordinator Dashboard</h1></div>;
-const SpectatorDashboard = () => <div className="container" style={{padding: '20px', color: '#fff'}}><h1>Spectator Dashboard (Public View)</h1></div>;
+//const SpectatorDashboard = () => <div className="container" style={{padding: '20px', color: '#fff'}}><h1>Spectator Dashboard (Public View)</h1></div>;
 
 
 // --- PROTECTED ROUTE COMPONENT ---

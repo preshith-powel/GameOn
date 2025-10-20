@@ -362,6 +362,12 @@ const TournamentViewPage = () => {
             default:
                 switch (tournamentData.sport.toLowerCase()) {
                     case 'carroms': return <RoundRobinSchedule {...renderProps} MatchCardComponent={CarromsScorecard} />;
+                    case 'chess': return <RoundRobinSchedule {...renderProps} MatchCardComponent={ChessScorecard} />;
+                    case 'hockey': return <RoundRobinSchedule {...renderProps} MatchCardComponent={HockeyScorecard} />;
+                    case 'volleyball': return <RoundRobinSchedule {...renderProps} MatchCardComponent={VolleyballScorecard} />;
+                    case 'kabaddi': return <RoundRobinSchedule {...renderProps} MatchCardComponent={KabaddiScorecard} />;
+                    case 'badminton': return <RoundRobinSchedule {...renderProps} MatchCardComponent={BadmintonScorecard} />;
+                    case 'football': return <RoundRobinSchedule {...renderProps} MatchCardComponent={FootballScorecard} />;
                     default: return <p style={{color: '#ff6b6b'}}>No specific scorecard available for {tournamentData.sport}.</p>;
                 }
         }
@@ -408,11 +414,9 @@ const TournamentViewPage = () => {
     return (
         <div style={containerStyles}>
             <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', marginBottom: '20px' }}>
-                {userRole === 'admin' && (
-                    <button style={backButtonStyles} onClick={() => navigate('/admin-dashboard')}>
-                        ← Back to Dashboard
-                    </button>
-                )}
+                <button style={backButtonStyles} onClick={() => navigate(-1)}>
+                    ← Back
+                </button>
             </div>
             <h1 style={headerStyles}>
                 {name.toUpperCase()} ({sport.toUpperCase()})

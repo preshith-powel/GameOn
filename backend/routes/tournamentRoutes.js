@@ -231,6 +231,50 @@ router.post('/:tournamentId/register-slots-dynamic', ...ADMIN_MIDDLEWARE, async 
     }
 });
 
+// @route   GET /api/tournaments/public
+// @access  Public
+// Fetches all ongoing and completed tournaments, with optional sport filter.
+router.get('/public', async (req, res) => {
+    try {
+        const { sport, status } = req.query;
+        console.log(`[DEBUG] Received sport: ${sport}, status: ${status}`);
+        let query = {}; // Start with an empty query
+        
+        if (sport) {
+            query.sport = sport;
+        }
+
+        if (status && status !== 'all') { // If a specific status is provided and not 'all'
+            query.status = status;
+        } else { // If status is 'all' or not provided, fetch all statuses
+            query.status = { $in: ['pending', 'ongoing', 'completed'] };
+        }
+        console.log('[DEBUG] Final Mongoose query:', query);
+        
+        const tournaments = await Tournament.find(query).sort({ createdAt: -1 });
+        console.log(`[DEBUG] Tournaments found (before population): ${tournaments.length}`);
+        
+        // Manually populate registeredParticipants based on participantsType for each tournament
+        for (let i = 0; i < tournaments.length; i++) {
+            const tournament = tournaments[i];
+            if (tournament.registeredParticipants && tournament.registeredParticipants.length > 0) {
+                const participantModel = tournament.participantsType === 'Player' ? Player : Team;
+                
+                await tournament.populate({
+                    path: 'registeredParticipants',
+                    model: participantModel, // Dynamically set model using direct reference
+                    select: 'name'
+                });
+            }
+        }
+
+        res.json(tournaments);
+    } catch (err) {
+        console.error("Public Tournament Fetch Error:", err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
 // @route   GET /api/tournaments/:id
 // @access  Public (for Spectator view)
 router.get('/:id', async (req, res) => {

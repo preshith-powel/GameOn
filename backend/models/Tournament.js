@@ -18,15 +18,6 @@ const tournamentSchema = new mongoose.Schema({
         required: true,
         enum: ['single elimination', 'round robin', 'group stage', 'aggregate scoring']
     },
-    // DATES: Now set to required: false, controlled by frontend logic
-    startDate: {
-        type: Date,
-        required: false 
-    },
-    endDate: {
-        type: Date,
-        required: false
-    },
     // PARTICIPANTS
     participantsType: {
         type: String,
