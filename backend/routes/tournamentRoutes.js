@@ -24,13 +24,26 @@ router.post('/', ...ADMIN_MIDDLEWARE, async (req, res) => {
             teamsPerGroup: req.body.teamsPerGroup,
             roundRobinMatchesPerGroup: req.body.roundRobinMatchesPerGroup,
             winnersPerGroup: req.body.winnersPerGroup,
+            // Ensure numEvents is saved as a number if present
+            numEvents: req.body.numEvents !== undefined ? Number(req.body.numEvents) : undefined,
         });
-        console.log("[DEBUG - Backend] Tournament object before save:", newTournament);
+
+        console.log("[DEBUG - Backend] Tournament object before validation:", newTournament);
+
+        // Validate the document first to return clear validation errors instead of a generic 500
+        try {
+            await newTournament.validate();
+        } catch (validationErr) {
+            console.error("Tournament validation failed:", validationErr.message);
+            return res.status(400).json({ msg: validationErr.message });
+        }
+
         const tournament = await newTournament.save();
         res.json(tournament);
     } catch (err) {
-        console.error("Tournament Creation Error:", err.message);
-        res.status(500).send('Server Error');
+        console.error("Tournament Creation Error:", err);
+        // Return the error message to frontend to aid debugging (keeps status 500 for unexpected errors)
+        res.status(500).json({ msg: err.message || 'Server Error' });
     }
 });
 
@@ -115,23 +128,51 @@ router.post('/:tournamentId/register-slots-dynamic', ...ADMIN_MIDDLEWARE, async 
                 User.findOne({ uniqueId: p.managerId, role: 'manager' })
             );
             const managerUsers = await Promise.all(managerCheckPromises);
-            
-            for (let i = 0; i < participants.length; i++) {
-                const p = participants[i];
+
+            // Ensure all manager IDs exist and collect their DB ids
+            const managerIds = [];
+            for (let i = 0; i < managerUsers.length; i++) {
                 const managerUser = managerUsers[i];
-                
+                const p = participants[i];
                 if (!managerUser) {
                     throw new Error(`Manager ID ${p.managerId} not found or is not a Manager.`);
                 }
-                
+                managerIds.push(managerUser._id.toString());
+            }
+
+            // Reject if the same manager is assigned to more than one team in this registration batch
+            const seen = new Set();
+            for (const mid of managerIds) {
+                if (seen.has(mid)) {
+                    return res.status(400).json({ msg: 'A single manager cannot manage more than one team in the same tournament.' });
+                }
+                seen.add(mid);
+            }
+
+            for (let i = 0; i < participants.length; i++) {
+                const p = participants[i];
+                const managerUser = managerUsers[i];
+
                 let team = await Team.findOne({ name: p.teamName });
 
                 if (!team) {
+                    // Before creating a new team, ensure this manager does not already manage another team in this tournament
+                    const existingManagedTeam = await Team.findOne({ managerId: managerUser._id, 'tournaments.tournamentId': tournament._id });
+                    if (existingManagedTeam) {
+                        return res.status(400).json({ msg: `Manager '${managerUser.uniqueId}' already manages team '${existingManagedTeam.name}' in this tournament. A manager can manage only one team per tournament.` });
+                    }
+
                     team = new Team({ name: p.teamName, managerId: managerUser._id });
                     await team.save(); 
                 } else {
                     if (team.managerId.toString() !== managerUser._id.toString()) {
                          return res.status(400).json({ msg: `Team '${p.teamName}' already exists and is managed by a different ID. Must reuse the existing manager ID.` });
+                    }
+
+                    // If the team exists, ensure the manager doesn't manage a different team in this tournament
+                    const existingManagedTeam = await Team.findOne({ managerId: managerUser._id, 'tournaments.tournamentId': tournament._id });
+                    if (existingManagedTeam && existingManagedTeam._id.toString() !== team._id.toString()) {
+                        return res.status(400).json({ msg: `Manager '${managerUser.uniqueId}' already manages team '${existingManagedTeam.name}' in this tournament. A manager can manage only one team per tournament.` });
                     }
                 }
                 

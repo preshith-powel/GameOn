@@ -40,6 +40,22 @@ const ManageParticipantsForm = ({ tournament, token, setView }) => {
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [loading, setLoading] = useState(true);
+    // For multi-sport: show events editor below participants when triggered
+    const [showEventsEditor, setShowEventsEditor] = useState(false);
+    const [events, setEvents] = useState(tournament.events || []);
+
+    // Number of events configured at tournament creation (fallback to existing events length, but never 0 if multi-sport)
+    let configuredNumEvents = 0;
+    if (tournament.sport === 'multi-sport') {
+        const numEventsVal = Number(tournament.numEvents);
+        if (!isNaN(numEventsVal) && numEventsVal > 0) {
+            configuredNumEvents = numEventsVal;
+        } else if (tournament.events && tournament.events.length > 0) {
+            configuredNumEvents = tournament.events.length;
+        } else {
+            configuredNumEvents = 1; // fallback to 1 if nothing set, so UI is not locked
+        }
+    }
 
     const calculateReadyStatus = (participants) => {
         const totalParticipants = tournament.maxParticipants;
@@ -99,6 +115,21 @@ const ManageParticipantsForm = ({ tournament, token, setView }) => {
                 setIsLocked(hasParticipants);
 
                 let initialList;
+
+                // initialize events from server if available
+                const serverEvents = fullTourney.events || tournament.events || [];
+                // Determine target number of events to show/edit
+                const target = fullTourney.numEvents || configuredNumEvents || serverEvents.length || 0;
+
+                if ((serverEvents.length || 0) >= target && serverEvents.length > 0) {
+                    setEvents(serverEvents.slice(0, target));
+                } else if (target > 0) {
+                    // Prefill placeholders up to target
+                    const filled = Array.from({ length: target }, (_, i) => ({ ...(serverEvents[i] || {}), eventName: serverEvents[i]?.eventName || '' }));
+                    setEvents(filled);
+                } else {
+                    setEvents(serverEvents);
+                }
 
                 if (hasParticipants) {
                     initialList = fullTourney.registeredParticipants.map((p, index) => {
@@ -179,6 +210,7 @@ const ManageParticipantsForm = ({ tournament, token, setView }) => {
     
     if (loading) return <div style={formContainerStyles}>Loading participant slots...</div>;
 
+    // Action buttons for registration/editing
     const actionButton = isLocked ? (
         <button 
             type="button" 
@@ -189,7 +221,7 @@ const ManageParticipantsForm = ({ tournament, token, setView }) => {
         </button>
     ) : (
         <button type="submit" style={submitButtonStyles} onClick={handleSubmit} disabled={loading}>
-            {loading ? 'Saving...' : 'Register/Save Changes'}
+            {loading ? 'Saving...' : (participantsList.length === 0 ? 'Register' : 'Save Changes')}
         </button>
     );
 
@@ -217,55 +249,29 @@ const ManageParticipantsForm = ({ tournament, token, setView }) => {
                         fontWeight: 'bold' 
                     }}>{tournament.name}</span>
                 </h2>
-                
                 <div style={{ display: 'flex', justifyContent: 'center', gap: '15px', marginTop: '20px' }}>
-                    {/* PARTICIPANTS TYPE */}
-                    <div style={{ 
-                        backgroundColor: '#006400', // Darker green
-                        color: '#ffffff', 
-                        padding: '8px 15px', 
-                        borderRadius: '8px', 
-                        fontWeight: 'bold', 
-                        textTransform: 'uppercase',
-                        fontSize: '1.1em'
-                    }}>
+                    <div style={{ backgroundColor: '#006400', color: '#fff', padding: '8px 15px', borderRadius: '8px', fontWeight: 'bold', textTransform: 'uppercase', fontSize: '1.1em' }}>
                         PARTICIPANTS : {tournament.participantsType}
                     </div>
-
-                    {/* SLOTS */}
-                    <div style={{ 
-                        backgroundColor: '#4682b4', // Azure blue
-                        color: '#ffffff', 
-                        padding: '8px 15px', 
-                        borderRadius: '8px', 
-                        fontWeight: 'bold', 
-                        textTransform: 'uppercase',
-                        fontSize: '1.1em'
-                    }}>
+                    <div style={{ backgroundColor: '#4682b4', color: '#fff', padding: '8px 15px', borderRadius: '8px', fontWeight: 'bold', textTransform: 'uppercase', fontSize: '1.1em' }}>
                         SLOTS : {participantsList.length}
                     </div>
-
-                    {/* STATUS */}
-                    <div style={{ 
-                        backgroundColor: '#cd5c5c', // Pinkish light red
-                        color: '#ffffff', 
-                        padding: '8px 15px', 
-                        borderRadius: '8px', 
-                        fontWeight: 'bold', 
-                        textTransform: 'uppercase',
-                        fontSize: '1.1em'
-                    }}>
+                    {tournament.sport === 'multi-sport' && (
+                        <div style={{ backgroundColor: '#ffa500', color: '#fff', padding: '8px 15px', borderRadius: '8px', fontWeight: 'bold', textTransform: 'uppercase', fontSize: '1.1em' }}>
+                            EVENTS : {configuredNumEvents}
+                        </div>
+                    )}
+                    <div style={{ backgroundColor: '#cd5c5c', color: '#fff', padding: '8px 15px', borderRadius: '8px', fontWeight: 'bold', textTransform: 'uppercase', fontSize: '1.1em' }}>
                         STATUS : {isLocked ? 'LOCKED' : 'EDITING'}
                     </div>
                 </div>
             </div>
-            
+
+            {/* Only show participants section for multi-sport, no tabs */}
             <form onSubmit={handleSubmit} style={{ marginTop: '20px' }}>
-                
                 <div style={slotWrapperStyles}>
                     {participantsList.map(p => {
                         const isReady = p.isReady; 
-                        
                         return (
                             <div key={p.id} style={slotItemStyles}>
                                 <div style={{ width: '30px', fontWeight: 'bold' }}>{p.id}</div>
@@ -279,11 +285,9 @@ const ManageParticipantsForm = ({ tournament, token, setView }) => {
                                         required
                                         disabled={isLocked}
                                     />
-                                    
                                     {isTeams && isReady && (
                                         <span style={readySymbolStyles}>✅</span>
                                     )}
-
                                     {isTeams && (
                                         <input 
                                             style={{...inputStyles, marginTop: '5px', marginBottom: 0, marginLeft: '10px'}} 
@@ -300,19 +304,101 @@ const ManageParticipantsForm = ({ tournament, token, setView }) => {
                         );
                     })}
                 </div>
-                
                 {error && <p style={errorStyles}>Error: {error}</p>}
                 {success && <p style={successStyles}>Success: {success}</p>}
             </form>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '30px', alignItems: 'center' }}>
-                
-                
-                <div style={{ display: 'flex', gap: '15px' }}>
-                    
+            {/* Action buttons: Save always right, Manage/Hide Events always left */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '30px', alignItems: 'center' }}>
+                <div>
+                    {tournament.sport === 'multi-sport' && (
+                        showEventsEditor ? (
+                            <button
+                                type="button"
+                                style={{ ...buttonStyles, backgroundColor: '#ffa500', color: '#1a1a1a', minWidth: '180px', fontWeight: 'bold' }}
+                                onClick={() => setShowEventsEditor(false)}
+                            >
+                                Hide Manage Events
+                            </button>
+                        ) : (
+                            <button
+                                type="button"
+                                style={{ ...buttonStyles, backgroundColor: '#ffa500', color: '#1a1a1a', minWidth: '180px', fontWeight: 'bold' }}
+                                onClick={() => setShowEventsEditor(true)}
+                            >
+                                Manage Events
+                            </button>
+                        )
+                    )}
+                </div>
+                <div>
                     {actionButton}
                 </div>
             </div>
+
+            {/* Events editor below participants if toggled */}
+            {showEventsEditor && (
+                <div style={{ marginTop: '30px', background: '#181818', borderRadius: '8px', padding: '20px' }}>
+                    <h3 style={{ color: '#ffa500', marginBottom: '15px' }}>Manage Events</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', minHeight: '220px', position: 'relative', padding: '10px', borderRadius: '6px', backgroundColor: '#111' }}>
+                        {events.length > 0 && events.map((ev, idx) => (
+                            <div key={idx} style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                                <input
+                                    style={{ ...inputStyles, flex: 2 }}
+                                    type="text"
+                                    placeholder={`Event ${idx + 1} name`}
+                                    value={ev.eventName || ''}
+                                    onChange={(e) => {
+                                        const updated = [...events];
+                                        updated[idx] = { ...updated[idx], eventName: e.target.value };
+                                        setEvents(updated);
+                                    }}
+                                />
+                                <input
+                                    style={{ ...inputStyles, flex: 2 }}
+                                    type="text"
+                                    placeholder="Venue"
+                                    value={ev.venue || ''}
+                                    onChange={(e) => {
+                                        const updated = [...events];
+                                        updated[idx] = { ...updated[idx], venue: e.target.value };
+                                        setEvents(updated);
+                                    }}
+                                />
+                            </div>
+                        ))}
+                        <div style={{ color: '#aaa', alignSelf: 'center', marginLeft: '8px', marginTop: '8px' }}>{events.length}/{configuredNumEvents} defined</div>
+                        {/* Save Events button pinned to bottom-right */}
+                        <div style={{ position: 'absolute', right: '12px', bottom: '12px', display: 'flex', gap: '10px' }}>
+                            <button type="button" style={{...submitButtonStyles, minWidth: '140px'}}
+                                disabled={
+                                    events.length !== configuredNumEvents ||
+                                    events.some(ev =>
+                                        !ev?.eventName ||
+                                        (tournament.venueType === 'multi' ? !ev?.venue : false)
+                                    )
+                                }
+                                onClick={async () => {
+                                    setError(''); setSuccess('');
+                                    try {
+                                        // Only save up to configuredNumEvents, and only eventName/venue
+                                        const payloadEvents = events.slice(0, configuredNumEvents).map(ev => ({
+                                            eventName: ev?.eventName || '',
+                                            venue: ev?.venue || ''
+                                        }));
+                                        const res = await axios.put(`http://localhost:5000/api/tournaments/${tournament._id}`, { events: payloadEvents }, { headers: { 'x-auth-token': token } });
+                                        setSuccess('Events saved successfully.');
+                                    } catch (err) {
+                                        console.error('Save events error', err);
+                                        setError(err.response?.data?.msg || 'Failed to save events.');
+                                    }
+                                }}>Save Events</button>
+                        </div>
+                        {error && <p style={errorStyles}>Error: {error}</p>}
+                        {success && <p style={successStyles}>Success: {success}</p>}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

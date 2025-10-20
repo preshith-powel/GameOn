@@ -30,6 +30,22 @@ const teamSchema = new mongoose.Schema({
             ref: 'Tournament'
         }
     }],
+    // For multi-sport: assign players per event per tournament
+    eventAssignments: [{
+        tournamentId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Tournament',
+            required: true
+        },
+        eventName: {
+            type: String,
+            required: true
+        },
+        playerIds: [{
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Player'
+        }]
+    }],
     isReady: {
         type: Boolean,
         default: false // Set to true by the Manager once the roster is complete

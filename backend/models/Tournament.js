@@ -11,7 +11,7 @@ const tournamentSchema = new mongoose.Schema({
     sport: {
         type: String,
         required: true,
-        enum: ['football', 'cricket', 'badminton', 'volleyball', 'kabaddi', 'multi-sport']
+        enum: ['football', 'badminton', 'volleyball', 'kabaddi', 'multi-sport']
     },
     format: {
         type: String,
@@ -40,9 +40,20 @@ const tournamentSchema = new mongoose.Schema({
         min: 2
     },
     playersPerTeam: { // Only for team tournaments
-        type: Number,
-        required: false,
-        min: 1
+        type: Number,
+        required: function() { return this.participantsType === 'Team' && this.sport !== 'multi-sport'; },
+        // Allow 0 for multi-sport (teams don't need a fixed roster size). For normal team tournaments enforce min 1.
+        validate: {
+            validator: function(v) {
+                // If it's a Team tournament and NOT multi-sport, require at least 1 player
+                if (this.participantsType === 'Team' && this.sport !== 'multi-sport') {
+                    return typeof v === 'number' && v >= 1;
+                }
+                // Otherwise allow 0 or undefined
+                return typeof v === 'number' && v >= 0 || typeof v === 'undefined';
+            },
+            message: 'playersPerTeam must be at least 1 for team tournaments (except multi-sport where 0 is allowed).'
+        }
     },
     liveScoreEnabled: {
         type: Boolean,
@@ -76,6 +87,11 @@ const tournamentSchema = new mongoose.Schema({
     }],
     
     // Multi-sport specific fields
+    numEvents: {
+        type: Number,
+        required: function() { return this.sport === 'multi-sport'; },
+        min: 1
+    },
     events: [{
         eventName: {
             type: String,

@@ -58,13 +58,58 @@ const RosterManagementView = ({ team, fetchAssignments, setView }) => {
         }
     };
     
+    // --- MULTI-SPORT: Per-event player assignment ---
+    const tournament = team.tournaments[0]?.tournamentId;
+    const isMultiSport = tournament && tournament.sport === 'multi-sport' && Array.isArray(tournament.events);
+    const [eventAssignments, setEventAssignments] = useState(() => {
+        // Prefill from team.eventAssignments if present
+        if (Array.isArray(team.eventAssignments)) {
+            const map = {};
+            team.eventAssignments.filter(ea => String(ea.tournamentId) === String(tournament?._id)).forEach(ea => {
+                map[ea.eventName] = ea.playerIds.map(String);
+            });
+            return map;
+        }
+        return {};
+    });
+    const [assignError, setAssignError] = useState('');
+    const [assignSuccess, setAssignSuccess] = useState('');
+
+    const handleAssignChange = (eventName, playerId, checked) => {
+        setEventAssignments(prev => {
+            const prevList = prev[eventName] || [];
+            return {
+                ...prev,
+                [eventName]: checked
+                    ? [...prevList, playerId]
+                    : prevList.filter(id => id !== playerId)
+            };
+        });
+    };
+
+    const handleSaveAssignments = async () => {
+        setAssignError(''); setAssignSuccess('');
+        try {
+            const token = getManagerToken();
+            // Build array for backend
+            const payload = Object.entries(eventAssignments).map(([eventName, playerIds]) => ({
+                tournamentId: tournament._id,
+                eventName,
+                playerIds
+            }));
+            await axios.put(`http://localhost:5000/api/manager/team/${team._id}/event-assignments`, { assignments: payload }, { headers: { 'x-auth-token': token } });
+            setAssignSuccess('Event assignments saved!');
+            fetchAssignments();
+        } catch (err) {
+            setAssignError(err.response?.data?.msg || 'Failed to save assignments.');
+        }
+    };
+
     return (
         <>
             <div style={cardStyles}>
                 <h2 style={{ color: '#00ffaa', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span>Team: {team.name}</span>
-                    
-                    {/* --- READY BUTTON --- */}
                     <button 
                         style={teamStatusButtonStyles(isReady)}
                         onClick={handleToggleReady}
@@ -76,25 +121,51 @@ const RosterManagementView = ({ team, fetchAssignments, setView }) => {
                 <h3 style={{ fontSize: '1.2em', marginBottom: '10px' }}>
                     Roster Status: {team.roster.length} / {MAX_PLAYERS} Players
                 </h3>
-                
                 {readyError && <p style={errorStyles}>Error: {readyError}</p>}
                 {readySuccess && <p style={successStyles}>{readySuccess}</p>}
-                
-                {/* Player Limit and Add Form */}
                 <AddPlayerForm 
                     fetchTeamData={fetchAssignments} 
                     activeTeam={team} 
                     maxPlayers={MAX_PLAYERS} 
                 />
-                
-                {/* Roster List */}
                 <TeamRoster 
                     roster={team.roster} 
                     fetchTeamData={fetchAssignments}
                     maxPlayersPerTeam={MAX_PLAYERS}
                 />
+                {/* Multi-sport event assignment UI */}
+                {isMultiSport && (
+                    <div style={{ marginTop: 30, background: '#181818', borderRadius: 8, padding: 20 }}>
+                        <h3 style={{ color: '#ffa500', marginBottom: 15 }}>Assign Players to Each Event</h3>
+                        {tournament.events.map(ev => (
+                            <div key={ev.eventName} style={{ marginBottom: 18, padding: 10, background: '#222', borderRadius: 6 }}>
+                                <div style={{ fontWeight: 'bold', color: '#00ffaa', marginBottom: 6 }}>{ev.eventName}</div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+                                    {team.roster.length === 0 && <span style={{ color: '#ff6b6b' }}>No players in roster.</span>}
+                                    {team.roster.map(item => (
+                                        <label key={item.playerId?._id} style={{ color: '#e0e0e0', background: '#333', borderRadius: 4, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={!!(eventAssignments[ev.eventName]?.includes(String(item.playerId?._id)))}
+                                                onChange={e => handleAssignChange(ev.eventName, String(item.playerId?._id), e.target.checked)}
+                                            />
+                                            {item.playerId?.name || 'Player'}
+                                        </label>
+                                    ))}
+                                </div>
+                                <div style={{ fontSize: '0.9em', color: '#aaa', marginTop: 4 }}>
+                                    {eventAssignments[ev.eventName]?.length > 0
+                                        ? `${eventAssignments[ev.eventName].length} assigned`
+                                        : 'No players assigned (no participation)'}
+                                </div>
+                            </div>
+                        ))}
+                        {assignError && <p style={errorStyles}>Error: {assignError}</p>}
+                        {assignSuccess && <p style={successStyles}>{assignSuccess}</p>}
+                        <button style={{ ...buttonStyles, marginTop: 10 }} onClick={handleSaveAssignments}>Save Event Assignments</button>
+                    </div>
+                )}
             </div>
-            
             <button 
                 style={{...buttonStyles, marginBottom: '20px', marginTop: 0}}
                 onClick={() => setView('assignments')}

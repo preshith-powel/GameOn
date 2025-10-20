@@ -134,7 +134,6 @@ const TeamRoster = ({ roster, fetchTeamData, maxPlayersPerTeam }) => {
         <div style={cardStyles}>
             <h3>Current Roster ({roster.length} / {maxPlayersPerTeam})</h3>
             {error && <p style={errorStyles}>Error: {error}</p>}
-            
             {roster.length === 0 ? (
                 <p>No players on the roster. Add players using the form above.</p>
             ) : (
@@ -158,7 +157,6 @@ const TeamRoster = ({ roster, fetchTeamData, maxPlayersPerTeam }) => {
                         ) : (
                             <span>{item.playerId?.name || 'Player Name Missing'} {item.isCaptain && '(Captain)'}</span>
                         )}
-
                         <div>
                             {editPlayerId !== item.playerId?._id && (
                                 <button 
@@ -171,12 +169,11 @@ const TeamRoster = ({ roster, fetchTeamData, maxPlayersPerTeam }) => {
                                     Edit
                                 </button>
                             )}
-                            
                             <button 
                                 style={{...rosterControlStyles, backgroundColor: '#ff6b6b'}} 
                                 onClick={() => handleRemove(item.playerId._id, item.playerId?.name || 'Player')}
                             >
-                                Remove
+                                Delete
                             </button>
                         </div>
                     </div>
