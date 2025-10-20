@@ -56,7 +56,8 @@ const tournamentSchema = new mongoose.Schema({
         default: 'off'
     },
     venues: [{
-        type: String
+        name: { type: String, required: true },
+        coordinatorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: false }
     }],
     adminId: {
         type: mongoose.Schema.Types.ObjectId,
@@ -107,6 +108,11 @@ const tournamentSchema = new mongoose.Schema({
         eventVenue: {
             type: String,
             required: false
+        },
+        coordinatorId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
+            required: false // Coordinator ID is optional for single venue multi-sport
         },
         status: {
             type: String,

@@ -1,186 +1,251 @@
-// frontend/src/components/admin/MultiSportSetup.jsx
+import React, { useState, useEffect } from 'react';
 
+const MultiSportSetup = ({ tournamentData, onDataChange }) => {
+    const [events, setEvents] = useState(tournamentData.events || []);
+    const [numEvents, setNumEvents] = useState(tournamentData.numEvents || 1);
 
-import React, { useState } from 'react';
-import axios from 'axios';
-
-const containerStyles = { backgroundColor: '#1a1a1a', padding: '30px', borderRadius: '10px', maxWidth: 900, margin: '0 auto' };
-const inputStyles = { width: '100%', padding: '10px', border: '1px solid #333', borderRadius: '5px', backgroundColor: '#2c2c2c', color: '#e0e0e0', boxSizing: 'border-box' };
-const buttonStyles = { padding: '10px 20px', backgroundColor: '#00ffaa', color: '#1a1a1a', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', marginRight: '10px' };
-const errorStyles = { color: '#ff6b6b', marginTop: '10px' };
-const successStyles = { color: '#00ffaa', marginTop: '10px' };
-
-// Helper: get number of events from tournament
-function getNumEvents(tournament) {
-    if (!tournament) return undefined;
-    let n = tournament.numEvents;
-    if (typeof n === 'string') n = parseInt(n);
-    return n;
-}
-
-const MultiSportSetup = ({ tournament, setView, token }) => {
-    const numEvents = getNumEvents(tournament);
-    const [events, setEvents] = useState(() => {
-        // If tournament.events exists, prefill; else, create empty slots
-        if (Array.isArray(tournament?.events) && tournament.events.length > 0) {
-            return tournament.events.map(e => ({ ...defaultEvent(), ...e }));
+    useEffect(() => {
+        // Ensure the number of events matches numEvents
+        if (events.length < numEvents) {
+            const newEvents = [...events];
+            for (let i = events.length; i < numEvents; i++) {
+                newEvents.push(defaultEvent(i));
+            }
+            setEvents(newEvents);
+        } else if (events.length > numEvents) {
+            setEvents(events.slice(0, numEvents));
         }
-        return Array.from({ length: numEvents }, () => defaultEvent());
-    });
-    const [error, setError] = useState('');
-    const [success, setSuccess] = useState('');
+    }, [numEvents, events]);
 
-    // Handle event field change
-    const handleEventChange = (idx, field, value) => {
-        setEvents(evts => evts.map((e, i) => i === idx ? { ...e, [field]: value } : e));
+    useEffect(() => {
+        // Update parent component with events data whenever local events change
+        onDataChange({ events, numEvents });
+    }, [events, numEvents, onDataChange]);
+
+    const defaultEvent = (index) => ({
+        eventName: `Event ${index + 1}`,
+        pointsFirst: 10,
+        pointsSecond: 7,
+        pointsThird: 5,
+        playersPerEvent: 1, // Default to 1 player per event
+        eventVenue: '',
+        coordinatorId: '',
+        status: 'pending' // Default status for new events
+    });
+
+    const handleNumEventsChange = (e) => {
+        const value = parseInt(e.target.value, 10);
+        if (!isNaN(value) && value >= 1) {
+            setNumEvents(value);
+        }
     };
 
-    // Save events to backend
-    const handleSaveEvents = async () => {
-        // Validate all fields filled
-        for (let e of events) {
-            if (!e.eventName || !e.eventVenue || !e.playersPerEvent) {
-                setError('Please fill all fields for every event.');
-                return;
-            }
-        }
-        try {
-            await axios.put(`http://localhost:5000/api/tournaments/${tournament._id}`, {
-                events,
-                numEvents: numEvents,
-                pointsSystem: 'point-total'
-            }, {
-                headers: { 'x-auth-token': token }
-            });
-            setSuccess('Events saved successfully!');
-            setTimeout(() => setView('view'), 1200);
-        } catch (err) {
-            setError(err.response?.data?.msg || 'Failed to save events');
+    const handleEventChange = (index, field, value) => {
+        const updatedEvents = events.map((event, i) => 
+            i === index ? { ...event, [field]: value } : event
+        );
+        setEvents(updatedEvents);
+    };
+
+    const addEvent = () => {
+        setNumEvents(prev => prev + 1);
+    };
+
+    const removeEvent = (index) => {
+        if (events.length > 1) {
+            const updatedEvents = events.filter((_, i) => i !== index);
+            setEvents(updatedEvents);
+            setNumEvents(prev => prev - 1);
         }
     };
 
     return (
-        <div style={containerStyles}>
-            <h2>Multi-Sport Event Setup</h2>
-            <p style={{ color: '#a0a0a0', marginBottom: '20px' }}>
-                Tournament: <strong>{tournament?.name}</strong> | No. of Events: <strong>{numEvents}</strong>
-            </p>
+        <div style={multiSportSetupStyles.container}>
+            <h3 style={multiSportSetupStyles.header}>Multi-Sport Event Setup</h3>
 
-            <form onSubmit={e => { e.preventDefault(); handleSaveEvents(); }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 20 }}>
-                    <thead>
-                        <tr style={{ background: '#222' }}>
-                            <th style={{ color: '#00ffaa', padding: 10 }}>#</th>
-                            <th style={{ color: '#00ffaa', padding: 10 }}>Event Name</th>
-                            <th style={{ color: '#00ffaa', padding: 10 }}>1st Points</th>
-                            <th style={{ color: '#00ffaa', padding: 10 }}>2nd Points</th>
-                            <th style={{ color: '#00ffaa', padding: 10 }}>3rd Points</th>
-                            <th style={{ color: '#00ffaa', padding: 10 }}>Players/Event</th>
-                            <th style={{ color: '#00ffaa', padding: 10 }}>Venue</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {events.map((event, idx) => (
-                            <tr key={idx} style={{ background: idx % 2 ? '#232323' : '#181818' }}>
-                                <td style={{ padding: 8, color: '#fff', textAlign: 'center' }}>{idx + 1}</td>
-                                <td style={{ padding: 8 }}>
-                                    <input
-                                        style={inputStyles}
-                                        type="text"
-                                        placeholder="Event Name"
-                                        value={event.eventName}
-                                        onChange={e => handleEventChange(idx, 'eventName', e.target.value)}
-                                    />
-                                </td>
-                                <td style={{ padding: 8 }}>
-                                    <input
-                                        style={inputStyles}
-                                        type="number"
-                                        min={0}
-                                        value={event.pointsFirst}
-                                        onChange={e => handleEventChange(idx, 'pointsFirst', parseInt(e.target.value) || 0)}
-                                    />
-                                </td>
-                                <td style={{ padding: 8 }}>
-                                    <input
-                                        style={inputStyles}
-                                        type="number"
-                                        min={0}
-                                        value={event.pointsSecond}
-                                        onChange={e => handleEventChange(idx, 'pointsSecond', parseInt(e.target.value) || 0)}
-                                    />
-                                </td>
-                                <td style={{ padding: 8 }}>
-                                    <input
-                                        style={inputStyles}
-                                        type="number"
-                                        min={0}
-                                        value={event.pointsThird}
-                                        onChange={e => handleEventChange(idx, 'pointsThird', parseInt(e.target.value) || 0)}
-                                    />
-                                </td>
-                                <td style={{ padding: 8 }}>
-                                    <input
-                                        style={inputStyles}
-                                        type="number"
-                                        min={1}
-                                        value={event.playersPerEvent}
-                                        onChange={e => handleEventChange(idx, 'playersPerEvent', parseInt(e.target.value) || 1)}
-                                    />
-                                </td>
-                                <td style={{ padding: 8 }}>
-                                    <input
-                                        style={inputStyles}
-                                        type="text"
-                                        placeholder="Venue"
-                                        value={event.eventVenue}
-                                        onChange={e => handleEventChange(idx, 'eventVenue', e.target.value)}
-                                    />
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-                <div style={{ textAlign: 'center', marginTop: 30 }}>
-                    <button
-                        type="submit"
-                        style={{ ...buttonStyles, fontSize: '16px', padding: '15px 30px' }}
-                    >
-                        Save Events
-                    </button>
-                    <button
-                        type="button"
-                        style={{ ...buttonStyles, backgroundColor: '#666', color: '#fff' }}
-                        onClick={() => setView('view')}
-                    >
-                        Cancel
-                    </button>
+            <div style={multiSportSetupStyles.formGroup}>
+                <label style={multiSportSetupStyles.label}>Number of Events:</label>
+                <input
+                    type="number"
+                    value={numEvents}
+                    onChange={handleNumEventsChange}
+                    min="1"
+                    style={multiSportSetupStyles.input}
+                />
+            </div>
+
+            {events.map((event, index) => (
+                <div key={index} style={multiSportSetupStyles.eventCard}>
+                    <h4 style={multiSportSetupStyles.eventCardHeader}>Event {index + 1}</h4>
+                    <div style={multiSportSetupStyles.formGroup}>
+                        <label style={multiSportSetupStyles.label}>Event Name:</label>
+                        <input
+                            type="text"
+                            value={event.eventName}
+                            onChange={(e) => handleEventChange(index, 'eventName', e.target.value)}
+                            style={multiSportSetupStyles.input}
+                        />
+                    </div>
+                    <div style={multiSportSetupStyles.formGroup}>
+                        <label style={multiSportSetupStyles.label}>Players Per Event:</label>
+                        <input
+                            type="number"
+                            value={event.playersPerEvent}
+                            onChange={(e) => handleEventChange(index, 'playersPerEvent', parseInt(e.target.value, 10) || 0)}
+                            min="0"
+                            style={multiSportSetupStyles.input}
+                        />
+                    </div>
+                    <div style={multiSportSetupStyles.formGroup}>
+                        <label style={multiSportSetupStyles.label}>Venue:</label>
+                        <input
+                            type="text"
+                            value={event.eventVenue}
+                            onChange={(e) => handleEventChange(index, 'eventVenue', e.target.value)}
+                            style={multiSportSetupStyles.input}
+                        />
+                    </div>
+                    {tournamentData.venueType === 'multi' && (
+                        <div style={multiSportSetupStyles.formGroup}>
+                            <label style={multiSportSetupStyles.label}>Coordinator ID:</label>
+                            <input
+                                type="text"
+                                value={event.coordinatorId}
+                                onChange={(e) => handleEventChange(index, 'coordinatorId', e.target.value)}
+                                style={multiSportSetupStyles.input}
+                                required={tournamentData.venueType === 'multi'}
+                            />
+                        </div>
+                    )}
+                    <div style={multiSportSetupStyles.pointsGroup}>
+                        <label style={multiSportSetupStyles.label}>Points for 1st:</label>
+                        <input
+                            type="number"
+                            value={event.pointsFirst}
+                            onChange={(e) => handleEventChange(index, 'pointsFirst', parseInt(e.target.value, 10) || 0)}
+                            min="0"
+                            style={multiSportSetupStyles.inputSmall}
+                        />
+                        <label style={multiSportSetupStyles.label}>2nd:</label>
+                        <input
+                            type="number"
+                            value={event.pointsSecond}
+                            onChange={(e) => handleEventChange(index, 'pointsSecond', parseInt(e.target.value, 10) || 0)}
+                            min="0"
+                            style={multiSportSetupStyles.inputSmall}
+                        />
+                        <label style={multiSportSetupStyles.label}>3rd:</label>
+                        <input
+                            type="number"
+                            value={event.pointsThird}
+                            onChange={(e) => handleEventChange(index, 'pointsThird', parseInt(e.target.value, 10) || 0)}
+                            min="0"
+                            style={multiSportSetupStyles.inputSmall}
+                        />
+                    </div>
+                    {events.length > 1 && (
+                        <button
+                            type="button"
+                            onClick={() => removeEvent(index)}
+                            style={multiSportSetupStyles.removeButton}
+                        >Remove Event</button>
+                    )}
                 </div>
-            </form>
-            {error && <p style={errorStyles}>Error: {error}</p>}
-            {success && <p style={successStyles}>Success: {success}</p>}
+            ))}
+            <button type="button" onClick={addEvent} style={multiSportSetupStyles.addButton}>+ Add Another Event</button>
         </div>
     );
 };
 
+const multiSportSetupStyles = {
+    container: {
+        backgroundColor: '#2a2a2a',
+        borderRadius: '8px',
+        padding: '20px',
+        marginBottom: '20px',
+        color: '#e0e0e0',
+        boxShadow: '0 4px 8px rgba(0, 0, 0, 0.2)',
+    },
+    header: {
+        color: '#00ffaa',
+        fontSize: '1.8em',
+        marginBottom: '20px',
+        textAlign: 'center',
+        borderBottom: '1px solid #444',
+        paddingBottom: '10px',
+    },
+    formGroup: {
+        marginBottom: '15px',
+    },
+    label: {
+        display: 'block',
+        marginBottom: '8px',
+        color: '#a0a0a0',
+        fontWeight: 'bold',
+    },
+    input: {
+        width: '100%',
+        padding: '10px',
+        borderRadius: '5px',
+        border: '1px solid #555',
+        backgroundColor: '#333',
+        color: '#e0e0e0',
+        fontSize: '1em',
+        boxSizing: 'border-box',
+    },
+    eventCard: {
+        backgroundColor: '#1a1a1a',
+        borderRadius: '8px',
+        padding: '15px',
+        marginBottom: '15px',
+        border: '1px solid #444',
+    },
+    eventCardHeader: {
+        color: '#00cc88',
+        fontSize: '1.3em',
+        marginBottom: '10px',
+        borderBottom: '1px solid #333',
+        paddingBottom: '5px',
+    },
+    pointsGroup: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        marginBottom: '15px',
+    },
+    inputSmall: {
+        width: '70px',
+        padding: '8px',
+        borderRadius: '5px',
+        border: '1px solid #555',
+        backgroundColor: '#333',
+        color: '#e0e0e0',
+        fontSize: '0.9em',
+    },
+    addButton: {
+        backgroundColor: '#007bff',
+        color: 'white',
+        padding: '10px 15px',
+        borderRadius: '5px',
+        border: 'none',
+        cursor: 'pointer',
+        fontSize: '1em',
+        marginTop: '10px',
+        transition: 'background-color 0.2s',
+        '&:hover': { backgroundColor: '#0056b3' },
+    },
+    removeButton: {
+        backgroundColor: '#dc3545',
+        color: 'white',
+        padding: '8px 12px',
+        borderRadius: '5px',
+        border: 'none',
+        cursor: 'pointer',
+        fontSize: '0.9em',
+        marginTop: '10px',
+        transition: 'background-color 0.2s',
+        '&:hover': { backgroundColor: '#c82333' },
+    },
+};
+
 export default MultiSportSetup;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

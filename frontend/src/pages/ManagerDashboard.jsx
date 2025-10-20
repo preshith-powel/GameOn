@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 // --- IMPORT REFACTORED COMPONENTS ---
 import AssignmentList from '../components/manager/AssignmentList';
 import RosterManagementView from '../components/manager/RosterManagementView';
+import MultiSportManagerDashboard from '../components/manager/MultiSportManagerDashboard';
 // ------------------------------------
 
 // --- Global Functions to get data from Local Storage ---
@@ -96,11 +97,21 @@ const ManagerDashboard = () => {
                     setView('assignments');
                     return null;
                 }
-                return <RosterManagementView 
-                             team={activeTeam} 
-                             fetchAssignments={fetchAssignments}
-                             setView={setView} 
-                       />;
+                
+                // Conditionally render based on sport type
+                if (activeTeam.tournaments[0]?.tournamentId?.sport === 'multi-sport') {
+                    return <MultiSportManagerDashboard 
+                                team={activeTeam} 
+                                fetchAssignments={fetchAssignments}
+                                setView={setView}
+                            />;
+                } else {
+                    return <RosterManagementView 
+                                team={activeTeam} 
+                                fetchAssignments={fetchAssignments}
+                                setView={setView}
+                            />;
+                }
             case 'assignments':
             default:
                 return <AssignmentList 

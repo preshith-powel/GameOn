@@ -49,6 +49,10 @@ const teamSchema = new mongoose.Schema({
     isReady: {
         type: Boolean,
         default: false // Set to true by the Manager once the roster is complete
+    },
+    isMultiSportReady: {
+        type: Boolean,
+        default: false // Set to true for multi-sport when all events have assigned players
     }
 }, {
     timestamps: true

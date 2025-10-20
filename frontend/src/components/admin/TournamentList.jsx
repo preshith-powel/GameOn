@@ -90,8 +90,9 @@ const TournamentList = ({ setView, setSelectedTournament }) => {
             
         } catch (err) {
             console.error("Schedule Generation Error:", err.response || err);
-            showToast(err.response?.data?.msg || 'Failed to generate schedule. Check if all participants are ready.', 'error');
-            setError(err.response?.data?.msg || 'Failed to generate schedule. Check if all participants are ready.');
+            const errorMessage = err.response?.data?.msg || 'Failed to generate schedule. Check if all participants are ready.';
+            showToast(errorMessage, 'error');
+            setError(errorMessage);
         }
     };
 
@@ -159,18 +160,31 @@ const TournamentList = ({ setView, setSelectedTournament }) => {
             return { readyCount: count, totalParticipants: totalParticipants, allReady: count === totalParticipants };
         }
         
-        if (tournament.participantsType !== 'Team' || !tournament.playersPerTeam || tournament.playersPerTeam === 0) {
-            const count = (tournament.registeredParticipants?.length || 0);
-            return { readyCount: count, totalParticipants: totalParticipants, allReady: count === totalParticipants };
+        // Handle Multi-Sport tournaments specifically
+        if (tournament.sport === 'multi-sport') {
+            let fullyAssignedTeams = 0;
+            tournament.registeredParticipants.forEach(team => {
+                if (team && team.isMultiSportReady) {
+                    fullyAssignedTeams++;
+                }
+            });
+            // For multi-sport, total participants are the teams, ready count is fully assigned teams
+            return { readyCount: fullyAssignedTeams, totalParticipants: totalParticipants, allReady: fullyAssignedTeams === totalParticipants };
         }
-
-        let readyCount = 0;
-        tournament.registeredParticipants.forEach(team => {
-            if (team && team.isReady) {
-                readyCount++;
-            }
-        });
-        return { readyCount, totalParticipants: totalParticipants, allReady: readyCount === totalParticipants };
+        
+        // Default Team tournament logic (non-multi-sport)
+        if (tournament.participantsType === 'Team') {
+            let readyCount = 0;
+            tournament.registeredParticipants.forEach(team => {
+                if (team && team.isReady) {
+                    readyCount++;
+                }
+            });
+            return { readyCount, totalParticipants: totalParticipants, allReady: readyCount === totalParticipants };
+        }
+        
+        // Fallback for any other unexpected scenario (should ideally not be hit)
+        return { readyCount: 0, totalParticipants: totalParticipants, allReady: false };
     };
 
     if (loading) return <div style={listContainerStyles}>Loading tournaments...</div>;
@@ -282,7 +296,7 @@ const TournamentList = ({ setView, setSelectedTournament }) => {
                                     label={isTeamsTournament ? 'Teams Ready' : 'Participants Registered'}
                                     value={readyCount}
                                     max={totalParticipants}
-                                    color={allReady ? '#00ffaa' : '#ff6b6b'}
+                                    color={allReady ? (t.status.toLowerCase() === 'pending' ? '#ffc107' : '#00ffaa') : '#ff6b6b'} // Yellow if all ready but pending, else green or red
                                 />
                             </div>
                             

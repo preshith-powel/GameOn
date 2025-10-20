@@ -30,32 +30,22 @@ router.get('/allteams', auth.protect, async (req, res) => {
 router.get('/assignments', auth.protect, auth.checkRole('manager'), async (req, res) => {
     try {
         const teams = await Team.find({ managerId: req.user.id })
-            .populate('tournaments.tournamentId', 'name status playersPerTeam createdAt') 
             .populate({
-                path: 'roster.playerId', 
+                path: 'tournaments.tournamentId',
+                model: 'Tournament',
+                select: 'name status playersPerTeam createdAt sport events numEvents'
+            })
+            .populate({
+                path: 'roster.playerId',
                 model: 'Player',
-                select: 'name contactInfo' 
+                select: 'name contactInfo'
             });
 
         // If the tournament is multi-sport, also populate its events and the team's eventAssignments
         for (let i = 0; i < teams.length; i++) {
             const team = teams[i];
             const currentTournament = team.tournaments[0]?.tournamentId;
-            if (currentTournament && currentTournament.sport === 'multi-sport') {
-                // Re-populate the team to include tournament events and the team's eventAssignments
-                teams[i] = await Team.findById(team._id)
-                    .populate({
-                        path: 'tournaments.tournamentId',
-                        populate: {
-                            path: 'events',
-                            model: 'Tournament.events'
-                        }
-                    })
-                    .populate({
-                        path: 'roster.playerId',
-                        model: 'Player'
-                    });
-            }
+            if (currentTournament && currentTournament.sport === 'multi-sport') { /* The population should now happen at the initial find */ }
         }
 
         // Sort teams by the creation date of their primary tournament in descending order
@@ -91,7 +81,7 @@ router.post('/players', auth.protect, auth.checkRole('manager'), async (req, res
             const maxPlayers = tournament?.playersPerTeam || 0;
             
             // Check if the current roster size is at or above the limit
-            if (maxPlayers > 0 && team.roster.length >= maxPlayers) {
+            if (tournament.sport !== 'multi-sport' && maxPlayers > 0 && team.roster.length >= maxPlayers) {
                 return res.status(400).json({ msg: `Roster is full. Max players allowed is ${maxPlayers}.` });
             }
         }
@@ -147,6 +137,68 @@ router.delete('/players/:playerId', auth.protect, auth.checkRole('manager'), asy
         await Player.findByIdAndDelete(req.params.playerId);
         res.json({ msg: 'Player removed successfully.' });
     } catch (err) { console.error(err.message); res.status(500).send('Server Error'); }
+});
+
+// @route   POST /api/manager/event-assignments
+// @desc    Save multi-sport event assignments for a team and update isMultiSportReady status
+// @access  Private (Manager only)
+router.post('/event-assignments', auth.protect, auth.checkRole('manager'), async (req, res) => {
+    const { teamId, assignments } = req.body; // assignments is an array of { eventName, playerIds }
+    
+    try {
+        const team = await Team.findOne({ _id: teamId, managerId: req.user.id });
+        if (!team) {
+            return res.status(404).json({ msg: 'Team not found or you are not the manager of this team.' });
+        }
+        
+        const tournamentId = team.tournaments[0]?.tournamentId;
+        if (!tournamentId) {
+            return res.status(400).json({ msg: 'Team is not registered for any tournament.' });
+        }
+        
+        const tournament = await Tournament.findById(tournamentId).populate('events');
+        if (!tournament || tournament.sport !== 'multi-sport') {
+            return res.status(400).json({ msg: 'Tournament is not a multi-sport type or not found.' });
+        }
+        
+        // Validate and save assignments
+        team.eventAssignments = []; // Clear existing assignments
+        let allEventsAssignedCorrectly = true;
+        
+        for (const eventDef of tournament.events) {
+            const assignment = assignments.find(a => a.eventName === eventDef.eventName);
+            if (!assignment) {
+                allEventsAssignedCorrectly = false;
+                break;
+            }
+            
+            // Validate uniqueness of players within this single event
+            const uniquePlayerIds = new Set(assignment.playerIds);
+            if (uniquePlayerIds.size !== assignment.playerIds.length) {
+                return res.status(400).json({ msg: `Duplicate players found for event '${eventDef.eventName}'. Each player must be unique within an event.` });
+            }
+
+            const requiredPlayers = eventDef.playersPerEvent || 0;
+            if (assignment.playerIds.length !== requiredPlayers) {
+                allEventsAssignedCorrectly = false;
+                break;
+            }
+            
+            team.eventAssignments.push({
+                tournamentId: tournamentId,
+                eventName: assignment.eventName,
+                playerIds: assignment.playerIds
+            });
+        }
+        
+        team.isMultiSportReady = allEventsAssignedCorrectly;
+        await team.save();
+        
+        res.json({ msg: 'Event assignments saved and team readiness updated.', team });
+    } catch (err) {
+        console.error("Event Assignment Error:", err.message);
+        res.status(500).send('Server Error');
+    }
 });
 
 module.exports = router;

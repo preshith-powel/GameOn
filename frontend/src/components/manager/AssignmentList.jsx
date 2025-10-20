@@ -30,17 +30,17 @@ const AssignmentList = ({ assignments, setView, setActiveTeam }) => {
     const flattenedAssignments = assignments.flatMap(team => 
         team.tournaments.map(assignment => {
             const rosterCount = team.roster.length;
-            const maxPlayers = assignment.tournamentId?.playersPerTeam || 5;
-            const isReady = team.isReady; 
+            const isReady = team.tournaments[0]?.tournamentId?.sport === 'multi-sport' ? team.isMultiSportReady : team.isReady; 
 
             return {
                 teamName: team.name,
                 teamId: team._id,
                 rosterCount: rosterCount, 
                 tournamentName: assignment.tournamentId?.name || 'Tournament Details Missing',
+                tournamentId: assignment.tournamentId?._id, 
                 tournamentStatus: (assignment.tournamentId?.status || 'N/A').toUpperCase(),
                 fullTeamObject: team, 
-                maxPlayersPerTeam: maxPlayers,
+                maxPlayersPerTeam: assignment.tournamentId?.sport === 'multi-sport' ? rosterCount : (assignment.tournamentId?.playersPerTeam || 0),
                 isReady: isReady
             };
         })
@@ -62,7 +62,7 @@ const AssignmentList = ({ assignments, setView, setActiveTeam }) => {
                                     (Team: {assignment.teamName})
                                 </span>
                                 <p style={{ fontSize: '0.8em', color: '#ff6b6b', margin: 0 }}>
-                                    Status: {assignment.tournamentStatus} | Roster: {assignment.rosterCount}/{assignment.maxPlayersPerTeam}
+                                    Status: {assignment.tournamentStatus}
                                 </p>
                             </div>
                             
@@ -78,7 +78,7 @@ const AssignmentList = ({ assignments, setView, setActiveTeam }) => {
                         <button 
                             style={{...buttonStyles, width: 'auto'}}
                             onClick={() => {
-                                setActiveTeam(assignment.fullTeamObject); 
+                                setActiveTeam({ ...assignment.fullTeamObject, sport: assignment.tournamentId?.sport }); 
                                 setView('roster-management'); 
                             }}
                         >

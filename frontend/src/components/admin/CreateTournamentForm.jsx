@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import axios from 'axios';
+import MultiSportSetup from './MultiSportSetup';
 
 // Helper function for Single Elimination validation (moved from Dashboard)
 const isPowerOfTwo = (n) => {
@@ -33,7 +34,7 @@ const CreateTournamentForm = ({ setView, token }) => {
         playersPerTeam: 5,
         numEvents: 1,
         venueType: 'off',
-        venues: '',
+        venues: [], // Changed to an array for dynamic venue/coordinator pairs
         pointsSystem: 'point-total',
         // New fields for Group Stage
         numGroups: 4,
@@ -41,6 +42,7 @@ const CreateTournamentForm = ({ setView, token }) => {
         roundRobinMatchesPerGroup: 1, // Default 1, max 2
         winnersPerGroup: 2, // Default 2
     });
+    const [multiSportEventsData, setMultiSportEventsData] = useState({ events: [], numEvents: 1 });
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     
@@ -140,11 +142,34 @@ const CreateTournamentForm = ({ setView, token }) => {
         // Default update for other fields, converting numbers where appropriate
         setFormData(prev => ({
             ...prev, 
-            [name]: (name === 'numGroups' || name === 'teamsPerGroup' || name === 'roundRobinMatchesPerGroup' || name === 'winnersPerGroup' || name === 'maxParticipants' || name === 'playersPerTeam' || name === 'numEvents') 
+            [name]: (name === 'numGroups' || name === 'teamsPerGroup' || name === 'roundRobinMatchesPerGroup' || name === 'winnersPerGroup' || name === 'maxParticipants' || name === 'playersPerTeam') 
                       ? Number(newValue) 
-                      : newValue 
+                      : (name === 'numEvents' ? Number(newValue) : newValue)
         }));
         setError('');
+    };
+
+    const addVenue = () => {
+        setFormData(prev => ({
+            ...prev,
+            venues: [...prev.venues, { name: '', coordinatorId: '' }]
+        }));
+    };
+
+    const removeVenue = (index) => {
+        setFormData(prev => ({
+            ...prev,
+            venues: prev.venues.filter((_, i) => i !== index)
+        }));
+    };
+
+    const handleVenueChange = (index, field, value) => {
+        setFormData(prev => ({
+            ...prev,
+            venues: prev.venues.map((venue, i) =>
+                i === index ? { ...venue, [field]: value } : venue
+            )
+        }));
     };
 
     const handleSubmit = async (e) => {
@@ -173,8 +198,13 @@ const CreateTournamentForm = ({ setView, token }) => {
             // endDate: formData.endDate,
             maxParticipants: formData.format === 'group stage' ? (formData.numGroups * formData.teamsPerGroup) : formData.maxParticipants,
             playersPerTeam: formData.participantsType === 'Team' ? formData.playersPerTeam : undefined,
-            numEvents: formData.sport === 'multi-sport' ? formData.numEvents : undefined,
-            venues: formData.venueType === 'multi' ? formData.venues.split(',').map(v => v.trim()) : (formData.venueType === 'single' ? [formData.venues] : []),
+            numEvents: formData.sport === 'multi-sport' ? multiSportEventsData.numEvents : undefined,
+            // If multi-sport and multi venue, venues are derived from events. Otherwise, use formData.venues.
+            venues: (formData.sport === 'multi-sport' && formData.venueType === 'multi') 
+                        ? multiSportEventsData.events.map(event => ({ name: event.eventVenue, coordinatorId: event.coordinatorId }))
+                        : (formData.venueType === 'off' ? [] : formData.venues),
+            // For multi-sport, send the event details
+            events: formData.sport === 'multi-sport' ? multiSportEventsData.events : undefined,
         };
 
         // Clean up group stage specific fields if not group stage format
@@ -321,7 +351,7 @@ const CreateTournamentForm = ({ setView, token }) => {
                         />
                         {bracketError && <p style={errorStyles}>{bracketError}</p>} 
                     </div>
-                    {formData.sport === 'multi-sport' ? (
+                    {formData.sport === 'multi-sport' && (
                         <div style={{...inputGroupStyles, flex: 1}}>
                             <label style={labelStyles} htmlFor="numEvents">No. of Events</label>
                             <input
@@ -335,7 +365,8 @@ const CreateTournamentForm = ({ setView, token }) => {
                                 min="1"
                             />
                         </div>
-                    ) : (formData.participantsType === 'Team' && (
+                    )}
+                    {(formData.participantsType === 'Team' && formData.sport !== 'multi-sport') && (
                         <div style={{...inputGroupStyles, flex: 1}}>
                             <label style={labelStyles} htmlFor="playersPerTeam">Players Per Team</label>
                             <input 
@@ -355,7 +386,7 @@ const CreateTournamentForm = ({ setView, token }) => {
                                            formData.sport === 'chess'}
                             />
                         </div>
-                    ))}
+                    )}
                     
                     {/* Removed multi-sport specific points system display */}
                     {/* {formData.format === 'multi-sport' && (
@@ -369,7 +400,42 @@ const CreateTournamentForm = ({ setView, token }) => {
                 </div>
                 <div style={inputGroupStyles}><label style={labelStyles} htmlFor="venueType">Venue Type</label><select style={selectStyles} id="venueType" name="venueType" value={formData.venueType} onChange={handleChange} required><option value="off">No Venue</option><option value="single">Single Venue</option><option value="multi">Multiple Venues</option></select></div>
                 
-                {(formData.venueType !== 'off') && (<div style={inputGroupStyles}><label style={labelStyles} htmlFor="venues">Venue Name(s)</label><input style={inputStyles} type="text" id="venues" name="venues" placeholder={formData.venueType === 'single' ? 'e.g., College Ground' : 'e.g., Venue A, Venue B, Venue C (comma separated)'} value={formData.venues} onChange={handleChange} required /></div>)}
+                {(formData.sport === 'multi-sport') ? (
+                    <MultiSportSetup 
+                        tournamentData={{ events: multiSportEventsData.events, numEvents: formData.numEvents, venueType: formData.venueType }} 
+                        onDataChange={setMultiSportEventsData} 
+                    />
+                ) : (formData.venueType !== 'off' && (
+                    <>
+                        <div style={inputGroupStyles}>
+                            <label style={labelStyles} htmlFor="venues">Venue Name(s)</label>
+                            {formData.venues.map((venue, index) => (
+                                <div key={index} style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+                                    <input
+                                        style={inputStyles}
+                                        type="text"
+                                        placeholder="Venue Name"
+                                        value={venue.name}
+                                        onChange={(e) => handleVenueChange(index, 'name', e.target.value)}
+                                        required
+                                    />
+                                    {(formData.venueType === 'multi' || (formData.venueType === 'single' && !formData.venues[index]?.coordinatorId)) ? (
+                                        <input
+                                            style={inputStyles}
+                                            type="text"
+                                            placeholder="Coordinator ID"
+                                            value={venue.coordinatorId}
+                                            onChange={(e) => handleVenueChange(index, 'coordinatorId', e.target.value)}
+                                            required={formData.venueType === 'multi'}
+                                        />
+                                    ) : null}
+                                    <button type="button" onClick={() => removeVenue(index)} style={{ padding: '5px 10px', backgroundColor: '#ff6b6b', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}>Remove Venue</button>
+                                </div>
+                            ))}
+                            <button type="button" onClick={addVenue} style={{ padding: '5px 10px', backgroundColor: '#00ffaa', color: '#1a1a1a', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', marginTop: '10px' }}>Add Venue</button>
+                        </div>
+                    </>
+                ))}
                 
                 <button type="submit" style={submitButtonStyles} disabled={!!bracketError}>Create Tournament</button>
                 

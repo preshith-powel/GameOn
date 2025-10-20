@@ -138,7 +138,6 @@ const ManageParticipantsForm = ({ tournament, token, setView }) => {
                             teamId: p._id, 
                             name: p.name || '', 
                             managerId: isTeams ? (p.managerId?.uniqueId || '') : undefined, 
-                            isReady: p.isReady || false
                         };
                         return participantData;
                     });
@@ -181,7 +180,7 @@ const ManageParticipantsForm = ({ tournament, token, setView }) => {
         setLoading(true);
 
         const dataToSend = participantsList.map(p => {
-            if (isTeams) { return { teamName: p.name, managerId: p.managerId }; } else { return { name: p.name }; }
+            if (isTeams) { return { teamId: p.teamId, teamName: p.name, managerId: p.managerId }; } else { return { name: p.name }; }
         });
         
         if (dataToSend.some(item => 

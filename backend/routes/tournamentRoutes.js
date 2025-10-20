@@ -77,8 +77,8 @@ router.get('/', ...ADMIN_MIDDLEWARE, async (req, res) => {
         const tournaments = await Tournament.find({ adminId: req.user.id })
             .sort({ startDate: -1 })
             .populate({
-                path: 'registeredParticipants', 
-                select: 'name isReady', 
+                path: 'registeredParticipants',
+                select: 'name isReady isMultiSportReady',
             });
 
         res.json(tournaments);
@@ -175,27 +175,44 @@ router.post('/:tournamentId/register-slots-dynamic', ...ADMIN_MIDDLEWARE, async 
                 const p = participants[i];
                 const managerUser = managerUsers[i];
 
-                let team = await Team.findOne({ name: p.teamName });
-
-                if (!team) {
+                let team;
+                if (p.teamId) {
+                    // If teamId is provided, attempt to find and update the existing team
+                    team = await Team.findById(p.teamId);
+                    if (team) {
+                        // Update team name if it changed
+                        if (team.name !== p.teamName) {
+                            team.name = p.teamName;
+                            await team.save();
+                        }
+                        // Check if manager ID changed and update if necessary
+                        if (team.managerId.toString() !== managerUser._id.toString()) {
+                            // Prevent a manager from taking over a team already managed by another manager in this tournament
+                            const existingManagedTeam = await Team.findOne({ managerId: managerUser._id, 'tournaments.tournamentId': tournament._id });
+                            if (existingManagedTeam && existingManagedTeam._id.toString() !== team._id.toString()) {
+                                throw new Error(`Manager '${managerUser.uniqueId}' already manages team '${existingManagedTeam.name}' in this tournament. A manager can manage only one team per tournament.`);
+                            }
+                            team.managerId = managerUser._id;
+                            await team.save();
+                        }
+                    } else {
+                        // If teamId was provided but team not found, treat as an error or new team (for now, error)
+                        throw new Error(`Team with ID ${p.teamId} not found.`);
+                    }
+                } else {
                     // Before creating a new team, ensure this manager does not already manage another team in this tournament
                     const existingManagedTeam = await Team.findOne({ managerId: managerUser._id, 'tournaments.tournamentId': tournament._id });
                     if (existingManagedTeam) {
                         return res.status(400).json({ msg: `Manager '${managerUser.uniqueId}' already manages team '${existingManagedTeam.name}' in this tournament. A manager can manage only one team per tournament.` });
                     }
 
+                    // Find team by name for a new creation check (if no teamId was provided)
+                    team = await Team.findOne({ name: p.teamName });
+                    if (team) {
+                        throw new Error(`Team name '${p.teamName}' already exists. If this is an existing team, its ID should be provided.`);
+                    }
                     team = new Team({ name: p.teamName, managerId: managerUser._id });
-                    await team.save(); 
-                } else {
-                    if (team.managerId.toString() !== managerUser._id.toString()) {
-                         return res.status(400).json({ msg: `Team '${p.teamName}' already exists and is managed by a different ID. Must reuse the existing manager ID.` });
-                    }
-
-                    // If the team exists, ensure the manager doesn't manage a different team in this tournament
-                    const existingManagedTeam = await Team.findOne({ managerId: managerUser._id, 'tournaments.tournamentId': tournament._id });
-                    if (existingManagedTeam && existingManagedTeam._id.toString() !== team._id.toString()) {
-                        return res.status(400).json({ msg: `Manager '${managerUser.uniqueId}' already manages team '${existingManagedTeam.name}' in this tournament. A manager can manage only one team per tournament.` });
-                    }
+                    await team.save();
                 }
                 
                 if (!team.tournaments.some(t => t.tournamentId.equals(tournament._id))) {
@@ -333,9 +350,42 @@ router.put('/:id', ...ADMIN_MIDDLEWARE, async (req, res) => {
 // @access  Admin
 router.delete('/:id', ...ADMIN_MIDDLEWARE, async (req, res) => {
     try {
-        const tournament = await Tournament.findOneAndDelete({ _id: req.params.id, adminId: req.user.id });
-        if (!tournament) { return res.status(404).json({ msg: 'Tournament not found or unauthorized.' }); }
-        res.json({ msg: 'Tournament removed' });
+        const tournamentId = req.params.id;
+        
+        // Find the tournament to be deleted
+        const tournamentToDelete = await Tournament.findOne({ _id: tournamentId, adminId: req.user.id });
+        if (!tournamentToDelete) {
+            return res.status(404).json({ msg: 'Tournament not found or unauthorized.' });
+        }
+        
+        // Find all teams registered for this tournament
+        const teamsToUpdate = await Team.find({ 'tournaments.tournamentId': tournamentId });
+        
+        for (const team of teamsToUpdate) {
+            // Remove the reference to the deleted tournament from the team's tournaments array
+            team.tournaments = team.tournaments.filter(t => t.tournamentId.toString() !== tournamentId);
+            
+            // If it's a multi-sport tournament, also remove related event assignments
+            team.eventAssignments = team.eventAssignments.filter(ea => ea.tournamentId.toString() !== tournamentId);
+            
+            // If the team is no longer associated with any tournaments, delete the team and its players
+            if (team.tournaments.length === 0) {
+                // Delete all players belonging to this team
+                if (team.roster && team.roster.length > 0) {
+                    await Player.deleteMany({ _id: { $in: team.roster.map(p => p.playerId) } });
+                }
+                // Delete the team itself
+                await Team.findByIdAndDelete(team._id);
+            } else {
+                // Otherwise, just save the updated team (with tournament reference removed)
+                await team.save();
+            }
+        }
+        
+        // Finally, delete the tournament itself
+        await Tournament.findByIdAndDelete(tournamentId);
+        
+        res.json({ msg: 'Tournament and associated roster entries removed' });
     } catch (err) { console.error(err.message); res.status(500).send('Server Error'); }
 });
 
