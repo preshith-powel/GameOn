@@ -176,8 +176,8 @@ router.post('/generate/:tournamentId', ...ADMIN_COORDINATOR_MIDDLEWARE, async (r
                             participantsType: fullTournament.participantsType, 
                             teams: [teamA, teamB], 
                             scores: [
-                                { teamId: teamA, score: 1 },
-                                { teamId: teamB, score: 1 }
+                                { teamId: teamA, score: 0 },
+                                { teamId: teamB, score: 0 }
                             ],
                             status: 'scheduled',
                             round: roundName, 

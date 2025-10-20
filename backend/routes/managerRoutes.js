@@ -30,12 +30,40 @@ router.get('/allteams', auth.protect, async (req, res) => {
 router.get('/assignments', auth.protect, auth.checkRole('manager'), async (req, res) => {
     try {
         const teams = await Team.find({ managerId: req.user.id })
-            .populate('tournaments.tournamentId', 'name status playersPerTeam') 
+            .populate('tournaments.tournamentId', 'name status playersPerTeam createdAt') 
             .populate({
                 path: 'roster.playerId', 
                 model: 'Player',
                 select: 'name contactInfo' 
             });
+
+        // If the tournament is multi-sport, also populate its events and the team's eventAssignments
+        for (let i = 0; i < teams.length; i++) {
+            const team = teams[i];
+            const currentTournament = team.tournaments[0]?.tournamentId;
+            if (currentTournament && currentTournament.sport === 'multi-sport') {
+                // Re-populate the team to include tournament events and the team's eventAssignments
+                teams[i] = await Team.findById(team._id)
+                    .populate({
+                        path: 'tournaments.tournamentId',
+                        populate: {
+                            path: 'events',
+                            model: 'Tournament.events'
+                        }
+                    })
+                    .populate({
+                        path: 'roster.playerId',
+                        model: 'Player'
+                    });
+            }
+        }
+
+        // Sort teams by the creation date of their primary tournament in descending order
+        teams.sort((a, b) => {
+            const dateA = a.tournaments[0]?.tournamentId?.createdAt ? new Date(a.tournaments[0].tournamentId.createdAt) : new Date(0);
+            const dateB = b.tournaments[0]?.tournamentId?.createdAt ? new Date(b.tournaments[0].tournamentId.createdAt) : new Date(0);
+            return dateB.getTime() - dateA.getTime();
+        });
 
         if (teams.length === 0) {
             return res.status(404).json({ msg: 'No teams are currently assigned to you.' });

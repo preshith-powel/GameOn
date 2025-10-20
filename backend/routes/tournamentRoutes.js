@@ -16,8 +16,30 @@ router.post('/', ...ADMIN_MIDDLEWARE, async (req, res) => {
     try {
         const { name, sport, format, startDate, endDate, participantsType, maxParticipants, playersPerTeam, liveScoreEnabled, venueType, venues } = req.body;
         console.log("[DEBUG - Backend] Incoming tournament creation request body:", req.body);
+
+        let finalFormat = format;
+        let finalParticipantsType = participantsType;
+        let finalPlayersPerTeam = playersPerTeam;
+        
+        // Specific rules for Carroms
+        if (sport === 'carroms') {
+            finalFormat = 'single elimination';
+            if (participantsType === 'Team') {
+                finalPlayersPerTeam = 2; // Carroms team is always 2 players
+            } else if (participantsType === 'Player') {
+                finalPlayersPerTeam = 1; // Carroms individual is always 1 player
+            }
+        }
+        
+        // Specific rules for Hockey and Kabaddi
+        if (sport === 'hockey' || sport === 'kabaddi') {
+            finalParticipantsType = 'Team'; // Hockey and Kabaddi are always team-based
+            // No change to format; can be single elimination or round robin
+            // playersPerTeam should be set by frontend or left as default from request
+        }
+
         const newTournament = new Tournament({
-            name, sport, format, startDate, endDate, participantsType, maxParticipants, playersPerTeam, liveScoreEnabled, venueType, venues,
+            name, sport, format: finalFormat, startDate, endDate, participantsType: finalParticipantsType, maxParticipants, playersPerTeam: finalPlayersPerTeam, liveScoreEnabled, venueType, venues,
             adminId: req.user.id,
             // Add group stage specific fields if present in req.body
             numGroups: req.body.numGroups,

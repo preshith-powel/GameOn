@@ -174,11 +174,10 @@ const MatchCard = ({ match, fetchMatches }) => {
 
 const CoordinatorDashboard = () => {
     const navigate = useNavigate();
-    const [allMatches, setAllMatches] = useState([]);
+    const [allCoordinatorMatches, setAllCoordinatorMatches] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [selectedTournament, setSelectedTournament] = useState(null);
-    const [tournaments, setTournaments] = useState([]);
+    const [coordinatorAssignments, setCoordinatorAssignments] = useState([]); // Stores all tournaments with assigned venues/events
 
     const coordinatorUsername = LOGGED_IN_USERNAME; 
     const coordinatorId = LOGGED_IN_ID; // The logged-in User's MongoDB ID
@@ -188,9 +187,7 @@ const CoordinatorDashboard = () => {
     // 1. Fetch ALL Tournaments (to populate dropdown)
     const fetchTournaments = async () => {
         try {
-            // Coordinator can view all tournaments, but let's assume this route is permissioned
-            // For now, we use a protected route to fetch all tournaments (used by Admin)
-            const res = await axios.get('http://localhost:5000/api/tournaments', {
+            const res = await axios.get('http://localhost:5000/api/tournaments/coordinator-assignments', {
                 headers: { 'x-auth-token': token }
             });
             setTournaments(res.data.filter(t => t.status !== 'pending')); // Only show active/completed tournaments
@@ -200,7 +197,8 @@ const CoordinatorDashboard = () => {
             }
         } catch (err) {
             console.error('Failed to fetch tournaments:', err);
-            setError('Failed to load tournaments list.');
+            setError(err.response?.data?.msg || 'Failed to load tournaments list.');
+            setLoading(false); 
         }
     };
     

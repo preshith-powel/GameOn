@@ -18,7 +18,7 @@ const submitButtonStyles = { padding: '10px 20px', backgroundColor: '#00ffaa', c
 const errorStyles = { color: '#ff6b6b', marginTop: '10px' };
 const successStyles = { color: '#00ffaa', marginTop: '10px' };
 
-const teamOnlySports = [ 'kabaddi', 'volleyball'];
+const teamOnlySports = [ 'kabaddi', 'volleyball', 'hockey']; // Ensure volleyball is in teamOnlySports
 
 // --- COMPONENT START ---
 const CreateTournamentForm = ({ setView, token }) => {
@@ -64,12 +64,23 @@ const CreateTournamentForm = ({ setView, token }) => {
                 // If changing from multi-sport to another sport, reset format
                 newFormData.format = 'single elimination'; // Default back to single elimination
                 // Keep other fields as they were or reset as needed
+            } else if (newValue === 'volleyball') {
+                newFormData.participantsType = 'Team';
+                newFormData.playersPerTeam = 0; // Dynamic, to be set by user
             } else if (teamOnlySports.includes(newValue)) {
                 newFormData.participantsType = 'Team';
-                newFormData.playersPerTeam = 5; // Default for these team sports
+                newFormData.playersPerTeam = 0; // Set to 0 to make it dynamic
             } else if (newValue === 'badminton') {
                 newFormData.participantsType = 'Player'; // Default to singles for badminton
                 newFormData.playersPerTeam = 0; 
+            } else if (newValue === 'chess') {
+                newFormData.format = 'single elimination';
+                newFormData.participantsType = 'Player';
+                newFormData.playersPerTeam = 1;
+            } else if (newValue === 'carroms') {
+                newFormData.format = 'single elimination';
+                newFormData.participantsType = 'Player'; // Default to Player for carroms
+                newFormData.playersPerTeam = 1; // Default to 1 player per team for individual carroms
             } else {
                 newFormData.participantsType = 'Player'; // Default for other individual sports
                 newFormData.playersPerTeam = 0; // Default for other individual sports
@@ -102,6 +113,12 @@ const CreateTournamentForm = ({ setView, token }) => {
                     newPlayersPerTeam = 0; // Singles
                 } else if (newParticipantsType === 'Team') {
                     newPlayersPerTeam = 2; // Doubles
+                }
+            } else if (formData.sport === 'carroms') {
+                if (newParticipantsType === 'Team') {
+                    newPlayersPerTeam = 2; // Carroms team is always 2 players
+                } else if (newParticipantsType === 'Player') {
+                    newPlayersPerTeam = 1; // Carroms individual is always 1 player
                 }
             } else if (newParticipantsType === 'Player') {
                 newPlayersPerTeam = 0; // For other individual sports
@@ -185,7 +202,7 @@ const CreateTournamentForm = ({ setView, token }) => {
                     <div style={{...inputGroupStyles, flex: 1}}>
                         <label style={labelStyles} htmlFor="sport">Sport Type</label>
                         <select style={selectStyles} id="sport" name="sport" value={formData.sport} onChange={handleChange} required>
-                            {['football', 'badminton', 'volleyball', 'kabaddi', 'multi-sport'].map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+                            {['football', 'badminton', 'volleyball', 'kabaddi', 'multi-sport', 'chess', 'hockey', 'carroms'].map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
                         </select>
                     </div>
                     <div style={{...inputGroupStyles, flex: 1}}>
@@ -197,11 +214,11 @@ const CreateTournamentForm = ({ setView, token }) => {
                             value={formData.format} 
                             onChange={handleChange} 
                             required
-                            disabled={formData.sport === 'multi-sport'} // Disable if multi-sport is selected
+                            disabled={formData.sport === 'multi-sport' || formData.sport === 'chess'} // Disable if multi-sport or chess is selected
                         >
-                            <option value="single elimination" disabled={formData.sport === 'multi-sport'}>Single Elimination</option>
-                            <option value="round robin" disabled={formData.sport === 'multi-sport'}>Round Robin</option>
-                            <option value="group stage" disabled={formData.sport === 'multi-sport'}>Group Stage</option>
+                            <option value="single elimination" disabled={formData.sport === 'multi-sport' || formData.sport === 'chess'}>Single Elimination</option>
+                            <option value="round robin" disabled={formData.sport === 'multi-sport' || formData.sport === 'chess'}>Round Robin</option>
+                            <option value="group stage" disabled={formData.sport === 'multi-sport' || formData.sport === 'chess'}>Group Stage</option>
                             <option value="aggregate scoring" disabled={formData.sport !== 'multi-sport'}>Aggregate Scoring Method</option>
                         </select>
                     </div>
@@ -276,13 +293,13 @@ const CreateTournamentForm = ({ setView, token }) => {
                             style={selectStyles} 
                             id="participantsType" 
                             name="participantsType" 
-                            value={formData.sport === 'multi-sport' ? 'Team' : formData.participantsType} 
+                            value={teamOnlySports.includes(formData.sport) || formData.sport === 'multi-sport' ? 'Team' : (formData.sport === 'chess' ? 'Player' : formData.participantsType)} 
                             onChange={handleChange} 
                             required
-                            disabled={formData.sport === 'multi-sport' || teamOnlySports.includes(formData.sport)}
+                            disabled={formData.sport === 'multi-sport' || teamOnlySports.includes(formData.sport) || formData.sport === 'chess'}
                         >
-                            <option value="Team">Teams</option>
-                            <option value="Player" disabled={teamOnlySports.includes(formData.sport) || formData.sport === 'multi-sport'}>Players (Individual)</option>
+                            <option value="Player" disabled={teamOnlySports.includes(formData.sport)}>Players (Individual)</option>
+                            <option value="Team">Teams</option> 
                         </select>
                     </div>
                     <div style={{...inputGroupStyles, flex: 1}}>
@@ -296,7 +313,7 @@ const CreateTournamentForm = ({ setView, token }) => {
                             onChange={handleChange} 
                             required 
                             min="2"
-                            disabled={formData.format === 'group stage'}
+                            disabled={formData.format === 'group stage'} // maxParticipants is still disabled for group stage
                         />
                         {bracketError && <p style={errorStyles}>{bracketError}</p>} 
                     </div>
@@ -322,11 +339,16 @@ const CreateTournamentForm = ({ setView, token }) => {
                                 type="number" 
                                 id="playersPerTeam" 
                                 name="playersPerTeam" 
-                                value={(formData.sport === 'badminton' && formData.participantsType === 'Team') ? 2 : formData.playersPerTeam}
+                                value={(formData.sport === 'badminton' && formData.participantsType === 'Team') ? 2 : 
+                                       (formData.sport === 'carroms' && formData.participantsType === 'Team') ? 2 : 
+                                       (formData.sport === 'carroms' && formData.participantsType === 'Player') ? 1 : 
+                                       formData.playersPerTeam}
                                 onChange={handleChange} 
                                 required 
                                 min="1"
-                                disabled={(formData.sport === 'badminton' && formData.participantsType === 'Team')}
+                                disabled={(formData.sport === 'badminton' && formData.participantsType === 'Team') || 
+                                           (formData.sport === 'carroms') || 
+                                           formData.sport === 'chess'}
                             />
                         </div>
                     ))}

@@ -11,7 +11,7 @@ const tournamentSchema = new mongoose.Schema({
     sport: {
         type: String,
         required: true,
-        enum: ['football', 'badminton', 'volleyball', 'kabaddi', 'multi-sport']
+        enum: ['football', 'badminton', 'volleyball', 'kabaddi', 'multi-sport', 'chess', 'hockey', 'carroms']
     },
     format: {
         type: String,

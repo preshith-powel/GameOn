@@ -11,12 +11,14 @@ import { calculateLeaderboard } from '../components/shared/LeaderboardCalculatio
 import { useToast } from '../components/shared/ToastNotification';
 // Import new sport-specific scorecard components
 import FootballScorecard from '../components/shared/FootballScorecard';
-import CricketScorecard from '../components/shared/CricketScorecard';
 import BadmintonScorecard from '../components/shared/BadmintonScorecard';
 import KabaddiScorecard from '../components/shared/KabaddiScorecard';
 import VolleyballScorecard from '../components/shared/VolleyballScorecard';
 import MultisportScorecard from '../components/shared/MultisportScorecard';
 import GroupStageSchedule from '../components/shared/GroupStageSchedule';
+import ChessScorecard from '../components/shared/ChessScorecard'; // Placeholder for Chess
+import HockeyScorecard from '../components/shared/HockeyScorecard'; // Placeholder for Hockey
+import CarromsScorecard from '../components/shared/CarromsScorecard'; // Placeholder for Carroms
 // ------------------------------------
 
 // --- IMPORT ALL STYLES FROM DEDICATED FILE ---
@@ -345,9 +347,10 @@ const TournamentViewPage = () => {
                 const GroupStageMatchCard = (() => {
                     switch (tournamentData.sport.toLowerCase()) {
                         case 'football': return FootballScorecard;
-                        case 'cricket': return CricketScorecard;
                         case 'badminton': return BadmintonScorecard;
                         case 'kabaddi': return KabaddiScorecard;
+                        case 'chess': return ChessScorecard;
+                        case 'hockey': return HockeyScorecard;
                         case 'volleyball': return VolleyballScorecard;
                         default: return null;
                     }
@@ -357,7 +360,10 @@ const TournamentViewPage = () => {
                 }
                 return <GroupStageSchedule {...renderProps} MatchCardComponent={GroupStageMatchCard} />;
             default:
-                return <p style={{color: '#ff6b6b'}}>No specific scorecard available for {tournamentData.sport}.</p>;
+                switch (tournamentData.sport.toLowerCase()) {
+                    case 'carroms': return <RoundRobinSchedule {...renderProps} MatchCardComponent={CarromsScorecard} />;
+                    default: return <p style={{color: '#ff6b6b'}}>No specific scorecard available for {tournamentData.sport}.</p>;
+                }
         }
     };
 
