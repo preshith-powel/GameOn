@@ -1,4 +1,4 @@
-// backend/models/Team.js - FULL UPDATED CODE (Add isReady Field)
+// backend/models/Team.js - FULL UPDATED CODE (Removed unique constraint from managerId)
 
 const mongoose = require('mongoose');
 
@@ -12,7 +12,7 @@ const teamSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User', 
         required: true,
-        unique: true
+        // Removed: unique: true, to allow one manager to control multiple teams
     },
     roster: [{
         playerId: {
@@ -30,12 +30,10 @@ const teamSchema = new mongoose.Schema({
             ref: 'Tournament'
         }
     }],
-    // --- NEW FIELD ADDED ---
     isReady: {
         type: Boolean,
-        default: false // Default to not ready
+        default: false // Set to true by the Manager once the roster is complete
     }
-    // -----------------------
 }, {
     timestamps: true
 });

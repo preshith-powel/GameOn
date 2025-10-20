@@ -1,20 +1,21 @@
-// frontend/src/App.jsx - FULL UPDATED CODE (Add TournamentView Route)
+// frontend/src/App.jsx - FINAL CODE
 
 import React, { useState } from 'react';
 import axios from 'axios';
 import './App.css';
 import { BrowserRouter as Router, Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 
-// Import all required pages/components
+// --- IMPORT PAGES ---
 import AdminDashboard from './pages/AdminDashboard';
 import ManagerDashboard from './pages/ManagerDashboard'; 
-import TournamentView from './pages/TournamentView'; // <<< NEW IMPORT
-// Placeholder for other Dashboards
+import TournamentViewPage from './pages/TournamentViewPage'; // Corrected import name
+
+// Placeholder for other Dashboards (used in App.jsx for routing)
 const CoordinatorDashboard = () => <div className="container" style={{padding: '20px', color: '#fff'}}><h1>Coordinator Dashboard</h1></div>;
 const SpectatorDashboard = () => <div className="container" style={{padding: '20px', color: '#fff'}}><h1>Spectator Dashboard (Public View)</h1></div>;
 
 
-// --- PROTECTED ROUTE COMPONENT (Unchanged) ---
+// --- PROTECTED ROUTE COMPONENT ---
 const ProtectedRoute = ({ children, requiredRole }) => {
     const token = localStorage.getItem('token');
     const userRole = localStorage.getItem('userRole');
@@ -28,9 +29,10 @@ const ProtectedRoute = ({ children, requiredRole }) => {
         switch (userRole) {
             case 'admin': path = '/admin-dashboard'; break;
             case 'manager': path = '/manager-dashboard'; break;
+            case 'coordinator': path = '/coordinator-dashboard'; break;
             default: path = '/';
         }
-        alert(`Access denied. You are logged in as ${userRole}.`);
+        console.warn(`Access denied. Navigating to ${userRole} dashboard.`);
         return <Navigate to={path} replace />;
     }
 
@@ -115,6 +117,7 @@ const LoginPage = () => {
             localStorage.setItem('token', token);
             localStorage.setItem('userRole', user.role); 
             localStorage.setItem('username', user.username); 
+            localStorage.setItem('userId', user.id); // CRITICAL: Store MongoDB ID for filtering
 
             alert(`Welcome, ${user.username}! Logging in as ${user.role}.`);
             
@@ -141,7 +144,7 @@ const LoginPage = () => {
         }
     };
 
-    // --- JSX RENDER ---
+    // --- JSX RENDER (Keep original structure for animation/design) ---
     return (
         <div className="container">
             <div className="outer-card">
@@ -233,7 +236,7 @@ function App() {
             <Routes>
                 <Route path="/" element={<LoginPage />} />
                 
-                {/* ADMIN DASHBOARD ROUTE */}
+                {/* DASHBOARD ROUTES (Protected) */}
                 <Route
                     path="/admin-dashboard"
                     element={
@@ -243,7 +246,6 @@ function App() {
                     }
                 />
                 
-                {/* MANAGER DASHBOARD ROUTE */}
                 <Route
                     path="/manager-dashboard"
                     element={
@@ -253,19 +255,23 @@ function App() {
                     }
                 />
                 
-                {/* NEW TOURNAMENT VIEW ROUTE */}
                 <Route
-                    path="/tournament/:id" // <<< NEW ROUTE DEFINITION
+                    path="/coordinator-dashboard"
                     element={
-                        <ProtectedRoute requiredRole="admin">
-                            <TournamentView />
+                        <ProtectedRoute requiredRole="coordinator">
+                            <CoordinatorDashboard />
                         </ProtectedRoute>
                     }
                 />
                 
-                {/* OTHER ROUTES */}
-                <Route path="/coordinator-dashboard" element={<CoordinatorDashboard />} />
+                {/* SPECTATOR DASHBOARD ROUTE (Public) */}
                 <Route path="/spectator-dashboard" element={<SpectatorDashboard />} />
+
+                {/* TOURNAMENT VIEW ROUTE (PUBLIC access for spectators/fans) */}
+                <Route
+                    path="/tournament/:id" 
+                    element={<TournamentViewPage />} // NO ProtectedRoute
+                />
             </Routes>
         </Router>
     );

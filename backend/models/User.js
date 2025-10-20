@@ -1,4 +1,4 @@
-// backend/models/User.js - FULL UPDATED CODE (Final Hashing and Comparison Fix)
+// backend/models/User.js - FINAL CODE (username is NOT unique)
 
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
@@ -7,12 +7,12 @@ const userSchema = mongoose.Schema({
     username: {
         type: String,
         required: true,
-        unique: true
+        // *** FIX: Removed unique: true to allow multiple users to share a name ***
     },
     uniqueId: {
         type: String,
         required: true,
-        unique: true
+        unique: true // <-- This remains the unique login identifier
     },
     password: {
         type: String,
@@ -27,7 +27,7 @@ const userSchema = mongoose.Schema({
     timestamps: true
 });
 
-// Middleware to hash password before saving
+// Middleware to hash password before saving (Remains the same)
 userSchema.pre('save', async function (next) {
     if (!this.isModified('password')) {
         next();
@@ -36,12 +36,10 @@ userSchema.pre('save', async function (next) {
     this.password = await bcrypt.hash(this.password, salt);
 });
 
-// Method for secure login comparison
+// Method for secure login comparison (Remains the same)
 userSchema.methods.matchPassword = async function (enteredPassword) {
     return await bcrypt.compare(enteredPassword, this.password);
 };
-
-// Removed explicit index definitions to fix warnings
 
 const User = mongoose.model('User', userSchema);
 

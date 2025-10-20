@@ -8,7 +8,7 @@ const cors = require('cors');
 // const { Server } = require("socket.io"); // 💡 REMOVED
 
 // --- IMPORT ROUTES ---
-const authRoutes = require('./routes/user.routes.js');
+const authRoutes = require('./routes/userRoutes.js');
 const tournamentRoutes = require('./routes/tournamentRoutes');
 const managerRoutes = require('./routes/managerRoutes');
 const matchRoutes = require('./routes/matchRoutes');
