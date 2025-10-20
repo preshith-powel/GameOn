@@ -3,7 +3,9 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import './App.css';
-import { BrowserRouter as Router, Routes, Route, useNavigate, Navigate } from 'react-router-dom';
+import { Routes, Route, useNavigate, Navigate, useLocation } from 'react-router-dom';
+import { CSSTransition, TransitionGroup } from 'react-transition-group';
+import { ToastProvider, useToast } from './components/shared/ToastNotification';
 
 // --- IMPORT PAGES ---
 import AdminDashboard from './pages/AdminDashboard';
@@ -47,8 +49,10 @@ const LoginPage = () => {
     const [regRole, setRegRole] = useState('admin');
     const [regId, setRegId] = useState('');
     const [regError, setRegError] = useState('');
+    const [imageError, setImageError] = useState(false); // New state for image error
 
     const navigate = useNavigate(); 
+    const showToast = useToast();
 
     const toggleForm = () => {
         setIsLogin(!isLogin);
@@ -92,7 +96,7 @@ const LoginPage = () => {
                 role,
             });
             console.log('Registration successful:', res.data);
-            alert('Registration successful! Please sign in.');
+            showToast('Registration successful! Please sign in.', 'success');
             toggleForm();
         } catch (err) {
             setRegError(err.response?.data?.msg || 'Registration failed. Please try again.');
@@ -119,7 +123,7 @@ const LoginPage = () => {
             localStorage.setItem('username', user.username); 
             localStorage.setItem('userId', user.id); // CRITICAL: Store MongoDB ID for filtering
 
-            alert(`Welcome, ${user.username}! Logging in as ${user.role}.`);
+            showToast(`Welcome, ${user.username}! Logging in as ${user.role}.`, 'success');
             
             switch (user.role) {
                 case 'admin':
@@ -149,7 +153,17 @@ const LoginPage = () => {
         <div className="container">
             <div className="outer-card">
                 <div className="welcome-panel">
-                    <img src="/logo.png" alt="GameON Logo" className="logo" />
+                    {/* Conditional rendering for the logo */}
+                    {imageError ? (
+                        <h1 className="logo-text">GameON Logo</h1> // Fallback text
+                    ) : (
+                        <img 
+                            src="/logo.png" 
+                            alt="GameON Logo" 
+                            className="logo" 
+                            onError={() => setImageError(true)} // Set error state on image load failure
+                        />
+                    )}
                     <h1 className="welcome-title">
                         GAME<span>ON</span>
                     </h1>
@@ -231,49 +245,57 @@ const LoginPage = () => {
 
 // --- MAIN APP COMPONENT ---
 function App() {
+    const location = useLocation();
+    const nodeRef = React.useRef(null); // Create a ref
     return (
-        <Router>
-            <Routes>
-                <Route path="/" element={<LoginPage />} />
-                
-                {/* DASHBOARD ROUTES (Protected) */}
-                <Route
-                    path="/admin-dashboard"
-                    element={
-                        <ProtectedRoute requiredRole="admin">
-                            <AdminDashboard />
-                        </ProtectedRoute>
-                    }
-                />
-                
-                <Route
-                    path="/manager-dashboard"
-                    element={
-                        <ProtectedRoute requiredRole="manager">
-                            <ManagerDashboard />
-                        </ProtectedRoute>
-                    }
-                />
-                
-                <Route
-                    path="/coordinator-dashboard"
-                    element={
-                        <ProtectedRoute requiredRole="coordinator">
-                            <CoordinatorDashboard />
-                        </ProtectedRoute>
-                    }
-                />
-                
-                {/* SPECTATOR DASHBOARD ROUTE (Public) */}
-                <Route path="/spectator-dashboard" element={<SpectatorDashboard />} />
+        <ToastProvider>
+            <div className="route-container">
+                <TransitionGroup>
+                    <CSSTransition nodeRef={nodeRef} key={location.key} classNames="fade" timeout={300}>
+                        <Routes location={location}>
+                            <Route path="/" element={<LoginPage />} />
+                            
+                            {/* DASHBOARD ROUTES (Protected) */}
+                            <Route
+                                path="/admin-dashboard"
+                                element={
+                                    <ProtectedRoute requiredRole="admin">
+                                        <AdminDashboard />
+                                    </ProtectedRoute>
+                                }
+                            />
+                            
+                            <Route
+                                path="/manager-dashboard"
+                                element={
+                                    <ProtectedRoute requiredRole="manager">
+                                        <ManagerDashboard />
+                                    </ProtectedRoute>
+                                }
+                            />
+                            
+                            <Route
+                                path="/coordinator-dashboard"
+                                element={
+                                    <ProtectedRoute requiredRole="coordinator">
+                                        <CoordinatorDashboard />
+                                    </ProtectedRoute>
+                                }
+                            />
+                            
+                            {/* SPECTATOR DASHBOARD ROUTE (Public) */}
+                            <Route path="/spectator-dashboard" element={<SpectatorDashboard />} />
 
-                {/* TOURNAMENT VIEW ROUTE (PUBLIC access for spectators/fans) */}
-                <Route
-                    path="/tournament/:id" 
-                    element={<TournamentViewPage />} // NO ProtectedRoute
-                />
-            </Routes>
-        </Router>
+                            {/* TOURNAMENT VIEW ROUTE (PUBLIC access for spectators/fans) */}
+                            <Route
+                                path="/tournament/:id" 
+                                element={<TournamentViewPage />} // NO ProtectedRoute
+                            />
+                        </Routes>
+                    </CSSTransition>
+                </TransitionGroup>
+            </div>
+        </ToastProvider>
     );
 }
 

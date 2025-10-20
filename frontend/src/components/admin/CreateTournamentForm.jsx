@@ -18,14 +18,25 @@ const submitButtonStyles = { padding: '10px 20px', backgroundColor: '#00ffaa', c
 const errorStyles = { color: '#ff6b6b', marginTop: '10px' };
 const successStyles = { color: '#00ffaa', marginTop: '10px' };
 
+const teamOnlySports = ['cricket', 'kabaddi', 'volleyball'];
+
 // --- COMPONENT START ---
 const CreateTournamentForm = ({ setView, token }) => {
     const [formData, setFormData] = useState({
-        name: '', sport: 'football', format: 'single elimination', 
-        startDate: '', endDate: '',
-        datesRequired: false, 
-        participantsType: 'Team', maxParticipants: 4, playersPerTeam: 5, 
-        liveScoreEnabled: false, venueType: 'off', venues: '',
+        name: '',
+        sport: 'football',
+        format: 'single elimination',
+        participantsType: 'Team',
+        maxParticipants: 4,
+        playersPerTeam: 5,
+        venueType: 'off',
+        venues: '',
+        pointsSystem: 'point-total',
+        // New fields for Group Stage
+        numGroups: 4,
+        teamsPerGroup: 4,
+        roundRobinMatchesPerGroup: 1, // Default 1, max 2
+        winnersPerGroup: 2, // Default 2
     });
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
@@ -41,11 +52,78 @@ const CreateTournamentForm = ({ setView, token }) => {
         const { name, value, type, checked } = e.target;
         let newValue = type === 'checkbox' ? checked : value;
 
-        if (type === 'checkbox') { newValue = checked; }
-        if (name === 'participantsType' && newValue === 'Player') { setFormData(prev => ({ ...prev, participantsType: 'Player', playersPerTeam: 0 })); return; }
-        if (name === 'datesRequired' && newValue === false) { setFormData(prev => ({ ...prev, datesRequired: false, startDate: '', endDate: '' })); return; }
+        if (name === 'sport') {
+            let newFormData = { ...formData, sport: newValue };
+            if (newValue === 'multi-sport') {
+                newFormData.format = 'aggregate scoring';
+                newFormData.participantsType = 'Team';
+                newFormData.playersPerTeam = 0; // Or adjust as per multi-sport logic
+                newFormData.pointsSystem = 'point-total';
+            } else if (formData.sport === 'multi-sport' && newValue !== 'multi-sport') {
+                // If changing from multi-sport to another sport, reset format
+                newFormData.format = 'single elimination'; // Default back to single elimination
+                // Keep other fields as they were or reset as needed
+            } else if (teamOnlySports.includes(newValue)) {
+                newFormData.participantsType = 'Team';
+                newFormData.playersPerTeam = 5; // Default for these team sports
+            } else if (newValue === 'badminton') {
+                newFormData.participantsType = 'Player'; // Default to singles for badminton
+                newFormData.playersPerTeam = 0; 
+            } else {
+                newFormData.participantsType = 'Player'; // Default for other individual sports
+                newFormData.playersPerTeam = 0; // Default for other individual sports
+            }
+            setFormData(prev => newFormData);
+            setError('');
+            return;
+        }
 
-        setFormData({ ...formData, [name]: newValue, });
+        if (name === 'format') {
+            let newFormat = newValue;
+            let newFormData = { ...formData, format: newFormat };
+            // Reset group stage specific fields if format is not 'group stage'
+            if (newFormat !== 'group stage') {
+                newFormData.numGroups = 4;
+                newFormData.teamsPerGroup = 4;
+                newFormData.roundRobinMatchesPerGroup = 1;
+                newFormData.winnersPerGroup = 2;
+            }
+            setFormData(prev => newFormData);
+            setError('');
+            return;
+        }
+
+        if (name === 'participantsType') {
+            let newParticipantsType = newValue;
+            let newPlayersPerTeam = formData.playersPerTeam;
+            if (formData.sport === 'badminton') {
+                if (newParticipantsType === 'Player') {
+                    newPlayersPerTeam = 0; // Singles
+                } else if (newParticipantsType === 'Team') {
+                    newPlayersPerTeam = 2; // Doubles
+                }
+            } else if (newParticipantsType === 'Player') {
+                newPlayersPerTeam = 0; // For other individual sports
+            } else if (newParticipantsType === 'Team') {
+                // Only change if it was previously 0 (individual), otherwise keep current or default to 5
+                newPlayersPerTeam = formData.playersPerTeam === 0 ? 5 : formData.playersPerTeam;
+            }
+            setFormData(prev => ({
+                ...prev,
+                participantsType: newParticipantsType,
+                playersPerTeam: newPlayersPerTeam
+            }));
+            setError('');
+            return;
+        }
+
+        // Default update for other fields, converting numbers where appropriate
+        setFormData(prev => ({
+            ...prev, 
+            [name]: (name === 'numGroups' || name === 'teamsPerGroup' || name === 'roundRobinMatchesPerGroup' || name === 'winnersPerGroup' || name === 'maxParticipants' || name === 'playersPerTeam') 
+                      ? Number(newValue) 
+                      : newValue 
+        }));
         setError('');
     };
 
@@ -57,22 +135,36 @@ const CreateTournamentForm = ({ setView, token }) => {
             return;
         }
 
+        // Group Stage validation
+        if (formData.format === 'group stage') {
+            if (formData.numGroups < 1) { setError('Number of Groups must be at least 1.'); return; }
+            if (formData.teamsPerGroup < 2) { setError('Number of Teams Per Group must be at least 2.'); return; }
+            if (formData.roundRobinMatchesPerGroup < 1 || formData.roundRobinMatchesPerGroup > 2) { setError('Number of Head to Head Round Robin matches must be 1 or 2.'); return; }
+            if (formData.winnersPerGroup < 1 || formData.winnersPerGroup >= formData.teamsPerGroup) { setError('Number of Winners from Each Group must be at least 1 and less than teams per group.'); return; }
+        }
+
         if (formData.participantsType === 'Team' && (!formData.playersPerTeam || formData.playersPerTeam < 1)) { setError('Please specify the number of players per team.'); return; }
         if (formData.maxParticipants < 2) { setError('Minimum 2 participants (teams or players) required.'); return; }
-        if (formData.datesRequired && (!formData.startDate || !formData.endDate)) { setError('Start and End dates are required for scheduled tournaments.'); return; }
 
         const dataToSubmit = {
             ...formData,
-            startDate: formData.datesRequired ? formData.startDate : undefined, 
-            endDate: formData.datesRequired ? formData.endDate : undefined, 
+            maxParticipants: formData.format === 'group stage' ? (formData.numGroups * formData.teamsPerGroup) : formData.maxParticipants,
             playersPerTeam: formData.participantsType === 'Team' ? formData.playersPerTeam : undefined,
             venues: formData.venueType === 'multi' ? formData.venues.split(',').map(v => v.trim()) : (formData.venueType === 'single' ? [formData.venues] : []),
         };
 
+        // Clean up group stage specific fields if not group stage format
+        if (formData.format !== 'group stage') {
+            delete dataToSubmit.numGroups;
+            delete dataToSubmit.teamsPerGroup;
+            delete dataToSubmit.roundRobinMatchesPerGroup;
+            delete dataToSubmit.winnersPerGroup;
+        }
+
         try {
             await axios.post('http://localhost:5000/api/tournaments', dataToSubmit, { headers: { 'x-auth-token': token, } });
             setSuccess(`Tournament created successfully!`);
-            setFormData(prev => ({ ...prev, name: '', startDate: '', endDate: '' }));
+            setFormData(prev => ({ ...prev, name: '' }));
             setTimeout(() => setView('view'), 1500); 
 
         } catch (err) {
@@ -90,18 +182,90 @@ const CreateTournamentForm = ({ setView, token }) => {
                     <div style={{...inputGroupStyles, flex: 1}}>
                         <label style={labelStyles} htmlFor="sport">Sport Type</label>
                         <select style={selectStyles} id="sport" name="sport" value={formData.sport} onChange={handleChange} required>
-                            {['football', 'cricket', 'badminton', 'volleyball', 'basketball', 'table tennis', 'esports', 'other'].map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+                            {['football', 'cricket', 'badminton', 'volleyball', 'kabaddi', 'multi-sport'].map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
                         </select>
                     </div>
                     <div style={{...inputGroupStyles, flex: 1}}>
                         <label style={labelStyles} htmlFor="format">Tournament Format</label>
-                        <select style={selectStyles} id="format" name="format" value={formData.format} onChange={handleChange} required>
-                            <option value="single elimination">Single Elimination</option>
-                            <option value="round robin">Round Robin</option>
-                            <option value="group stage">Group Stage</option>
+                        <select 
+                            style={selectStyles} 
+                            id="format" 
+                            name="format" 
+                            value={formData.format} 
+                            onChange={handleChange} 
+                            required
+                            disabled={formData.sport === 'multi-sport'} // Disable if multi-sport is selected
+                        >
+                            <option value="single elimination" disabled={formData.sport === 'multi-sport'}>Single Elimination</option>
+                            <option value="round robin" disabled={formData.sport === 'multi-sport'}>Round Robin</option>
+                            <option value="group stage" disabled={formData.sport === 'multi-sport'}>Group Stage</option>
+                            <option value="aggregate scoring" disabled={formData.sport !== 'multi-sport'}>Aggregate Scoring Method</option>
                         </select>
                     </div>
                 </div>
+                {/* New Group Stage specific inputs */}
+                {formData.format === 'group stage' && (
+                    <>
+                        <div style={{ display: 'flex', gap: '20px' }}>
+                            <div style={{...inputGroupStyles, flex: 1}}>
+                                <label style={labelStyles} htmlFor="numGroups">No. of Groups</label>
+                                <input 
+                                    style={inputStyles} 
+                                    type="number" 
+                                    id="numGroups" 
+                                    name="numGroups" 
+                                    value={formData.numGroups} 
+                                    onChange={handleChange} 
+                                    required 
+                                    min="1"
+                                />
+                            </div>
+                            <div style={{...inputGroupStyles, flex: 1}}>
+                                <label style={labelStyles} htmlFor="teamsPerGroup">No. of Teams Per Group</label>
+                                <input 
+                                    style={inputStyles} 
+                                    type="number" 
+                                    id="teamsPerGroup" 
+                                    name="teamsPerGroup" 
+                                    value={formData.teamsPerGroup} 
+                                    onChange={handleChange} 
+                                    required 
+                                    min="2"
+                                />
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '20px' }}>
+                            <div style={{...inputGroupStyles, flex: 1}}>
+                                <label style={labelStyles} htmlFor="roundRobinMatchesPerGroup">Number of Head to Head Round Robin</label>
+                                <input 
+                                    style={inputStyles} 
+                                    type="number" 
+                                    id="roundRobinMatchesPerGroup" 
+                                    name="roundRobinMatchesPerGroup" 
+                                    value={formData.roundRobinMatchesPerGroup} 
+                                    onChange={handleChange} 
+                                    required 
+                                    min="1" 
+                                    max="2" // Maximum 2 round robin rounds
+                                />
+                            </div>
+                            <div style={{...inputGroupStyles, flex: 1}}>
+                                <label style={labelStyles} htmlFor="winnersPerGroup">Number of Winners from Each Group</label>
+                                <input 
+                                    style={inputStyles} 
+                                    type="number" 
+                                    id="winnersPerGroup" 
+                                    name="winnersPerGroup" 
+                                    value={formData.winnersPerGroup} 
+                                    onChange={handleChange} 
+                                    required 
+                                    min="1"
+                                    max={formData.teamsPerGroup -1} // Max winners is one less than teams per group
+                                />
+                            </div>
+                        </div>
+                    </>
+                )}
                 <div style={{ display: 'flex', gap: '20px' }}>
                     <div style={{...inputGroupStyles, flex: 1}}>
                         <label style={labelStyles} htmlFor="participantsType">Participants</label>
@@ -112,34 +276,57 @@ const CreateTournamentForm = ({ setView, token }) => {
                             value={formData.participantsType} 
                             onChange={handleChange} 
                             required
+                            disabled={teamOnlySports.includes(formData.sport)}
                         >
                             <option value="Team">Teams</option>
-                            <option value="Player">Players (Individual)</option>
+                            <option value="Player" disabled={teamOnlySports.includes(formData.sport)}>Players (Individual)</option>
                         </select>
                     </div>
                     <div style={{...inputGroupStyles, flex: 1}}>
                         <label style={labelStyles} htmlFor="maxParticipants">No. of {formData.participantsType.charAt(0).toUpperCase() + formData.participantsType.slice(1)}</label>
-                        <input style={inputStyles} type="number" id="maxParticipants" name="maxParticipants" value={formData.maxParticipants} onChange={handleChange} required min="2" />
+                        <input 
+                            style={inputStyles} 
+                            type="number" 
+                            id="maxParticipants" 
+                            name="maxParticipants" 
+                            value={formData.format === 'group stage' ? (formData.numGroups * formData.teamsPerGroup) : formData.maxParticipants} 
+                            onChange={handleChange} 
+                            required 
+                            min="2"
+                            disabled={formData.format === 'group stage'}
+                        />
                         {bracketError && <p style={errorStyles}>{bracketError}</p>} 
                     </div>
-                    {formData.participantsType === 'Team' && (<div style={{...inputGroupStyles, flex: 1}}><label style={labelStyles} htmlFor="playersPerTeam">Players Per Team</label><input style={inputStyles} type="number" id="playersPerTeam" name="playersPerTeam" value={formData.playersPerTeam} onChange={handleChange} required min="1" /></div>)}
+                    {formData.participantsType === 'Team' && formData.sport !== 'multi-sport' && (
+                        <div style={{...inputGroupStyles, flex: 1}}>
+                            <label style={labelStyles} htmlFor="playersPerTeam">Players Per Team</label>
+                            <input 
+                                style={inputStyles} 
+                                type="number" 
+                                id="playersPerTeam" 
+                                name="playersPerTeam" 
+                                value={(formData.sport === 'badminton' && formData.participantsType === 'Team') ? 2 : formData.playersPerTeam}
+                                onChange={handleChange} 
+                                required 
+                                min="1"
+                                disabled={(formData.sport === 'badminton' && formData.participantsType === 'Team')}
+                            />
+                        </div>
+                    )}
+                    
+                    {/* Removed multi-sport specific points system display */}
+                    {/* {formData.format === 'multi-sport' && (
+                        <div style={{...inputGroupStyles, flex: 1}}>
+                            <label style={labelStyles}>Points System</label>
+                            <div style={{...inputStyles, backgroundColor: '#333', color: '#00ffaa', fontWeight: 'bold'}}>
+                                Point-Total System (Auto-selected)
+                            </div>
+                        </div>
+                    )} */}
                 </div>
-                
-                <div style={inputGroupStyles}>
-                    <label style={labelStyles}><input type="checkbox" name="datesRequired" checked={formData.datesRequired} onChange={handleChange} style={{ marginRight: '10px' }}/>Require Specific Start/End Dates (Uncheck if dates are NOT needed)</label>
-                </div>
-                
-                {formData.datesRequired && (
-                    <div style={{ display: 'flex', gap: '20px' }}>
-                        <div style={inputGroupStyles}><label style={labelStyles} htmlFor="startDate">Start Date</label><input style={inputStyles} type="date" id="startDate" name="startDate" value={formData.startDate} onChange={handleChange} required={formData.datesRequired} /></div>
-                        <div style={inputGroupStyles}><label style={labelStyles} htmlFor="endDate">End Date</label><input style={inputStyles} type="date" id="endDate" name="endDate" value={formData.endDate} onChange={handleChange} required={formData.datesRequired} /></div>
-                    </div>
-                )}
-
                 <div style={inputGroupStyles}><label style={labelStyles} htmlFor="venueType">Venue Type</label><select style={selectStyles} id="venueType" name="venueType" value={formData.venueType} onChange={handleChange} required><option value="off">No Venue</option><option value="single">Single Venue</option><option value="multi">Multiple Venues</option></select></div>
                 
                 {(formData.venueType !== 'off') && (<div style={inputGroupStyles}><label style={labelStyles} htmlFor="venues">Venue Name(s)</label><input style={inputStyles} type="text" id="venues" name="venues" placeholder={formData.venueType === 'single' ? 'e.g., College Ground' : 'e.g., Venue A, Venue B, Venue C (comma separated)'} value={formData.venues} onChange={handleChange} required /></div>)}
-                <div style={inputGroupStyles}><label style={labelStyles}><input type="checkbox" name="liveScoreEnabled" checked={formData.liveScoreEnabled} onChange={handleChange} style={{ marginRight: '10px' }}/>Enable Real-Time Live Scoring</label></div>
                 
                 <button type="submit" style={submitButtonStyles} disabled={!!bracketError}>Create Tournament</button>
                 

@@ -5,9 +5,87 @@
  * Uses simplified football/soccer scoring rules (Win=3, Draw=1, Loss=0).
  * @param {object} tournament - The tournament object.
  * @param {array} matches - All matches for the tournament.
- * @returns {array} Sorted array of participant statistics.
+ * @returns {array|object} Sorted array of participant statistics (for round robin/single elimination) or an object of leaderboards keyed by group name (for group stage).
  */
 export const calculateLeaderboard = (tournament, matches) => {
+    // Handle Group Stage separately
+    if (tournament.format === 'group stage') {
+        const groupLeaderboards = {};
+        const uniqueGroups = [...new Set(matches.map(m => m.group))].filter(Boolean).sort();
+
+        uniqueGroups.forEach(groupName => {
+            const matchesInGroup = matches.filter(m => m.group === groupName);
+            const participantsInGroup = tournament.registeredParticipants.filter(p => 
+                matchesInGroup.some(m => m.teams.some(teamId => teamId.toString() === p._id.toString()))
+            );
+            
+            if (participantsInGroup.length === 0) return; 
+
+            const groupStatsMap = new Map();
+            participantsInGroup.forEach(p => {
+                groupStatsMap.set(p._id.toString(), {
+                    name: p.name || 'Unknown',
+                    p: 0, w: 0, l: 0, d: 0, goalsScored: 0, goalsConceded: 0, pts: 0,
+                    id: p._id.toString()
+                });
+            });
+
+            matchesInGroup.filter(m => m.status === 'completed' && m.scores && m.teams?.length === 2).forEach(match => {
+                const idA = match.teams[0]?._id.toString();
+                const idB = match.teams[1]?._id.toString();
+
+                if (!groupStatsMap.has(idA) || !groupStatsMap.has(idB)) return;
+
+                const statA = groupStatsMap.get(idA);
+                const statB = groupStatsMap.get(idB);
+
+                const scoreA = match.scores.teamA || 0;
+                const scoreB = match.scores.teamB || 0;
+
+                statA.p += 1;
+                statB.p += 1;
+                statA.goalsScored += scoreA;
+                statA.goalsConceded += scoreB;
+                statB.goalsScored += scoreB;
+                statB.goalsConceded += scoreA;
+
+                if (scoreA > scoreB) {
+                    statA.w += 1;
+                    statB.l += 1;
+                    statA.pts += 3;
+                } else if (scoreB > scoreA) {
+                    statB.w += 1;
+                    statA.l += 1;
+                    statB.pts += 3;
+                } else {
+                    statA.d += 1;
+                    statB.d += 1;
+                    statA.pts += 1;
+                }
+            });
+
+            let groupLeaderboardArray = Array.from(groupStatsMap.values()).map(stat => ({
+                ...stat,
+                diff: stat.goalsScored - stat.goalsConceded,
+                wld: `${stat.w}-${stat.l}-${stat.d}`
+            }));
+
+            groupLeaderboardArray.sort((a, b) => {
+                if (b.pts !== a.pts) return b.pts - a.pts;
+                return b.diff - a.diff;
+            });
+
+            groupLeaderboardArray = groupLeaderboardArray.map((stat, index) => ({
+                ...stat,
+                rank: index + 1
+            }));
+
+            groupLeaderboards[groupName] = groupLeaderboardArray.filter(stat => stat.p > 0 || participantsInGroup.some(p => p._id.toString() === stat.id));
+        });
+
+        return groupLeaderboards;
+    }
+
     // 1. Initialize stats for all registered participants
     const statsMap = new Map();
     const participants = tournament.registeredParticipants || [];
@@ -61,7 +139,7 @@ export const calculateLeaderboard = (tournament, matches) => {
     // 3. Convert map to array and calculate Goal Difference
     let leaderboardArray = Array.from(statsMap.values()).map(stat => ({
         ...stat,
-        diff: stat.goalsScored - stat.goalsConceded,
+        diff: stat.goalsScored - stat.goalsConceded, // Corrected to GS - GC
         wld: `${stat.w}-${stat.l}-${stat.d}`
     }));
 

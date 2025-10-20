@@ -7,8 +7,16 @@ import axios from 'axios';
 // --- IMPORT REFACTORED COMPONENTS ---
 import Leaderboard from '../components/shared/Leaderboard';
 import RoundRobinSchedule from '../components/shared/RoundRobinSchedule';
-import KnockoutSchedule from '../components/shared/KnockoutSchedule';
 import { calculateLeaderboard } from '../components/shared/LeaderboardCalculations';
+import { useToast } from '../components/shared/ToastNotification';
+// Import new sport-specific scorecard components
+import FootballScorecard from '../components/shared/FootballScorecard';
+import CricketScorecard from '../components/shared/CricketScorecard';
+import BadmintonScorecard from '../components/shared/BadmintonScorecard';
+import KabaddiScorecard from '../components/shared/KabaddiScorecard';
+import VolleyballScorecard from '../components/shared/VolleyballScorecard';
+import MultisportScorecard from '../components/shared/MultisportScorecard';
+import GroupStageSchedule from '../components/shared/GroupStageSchedule';
 // ------------------------------------
 
 // --- IMPORT ALL STYLES FROM DEDICATED FILE ---
@@ -20,17 +28,6 @@ import {
     rrTeamRowStyles, rrScoreInputStyles, scoreFieldStyles 
 } from '../components/shared/TournamentStyles'; 
 // ---------------------------------------------
-
-
-// --- Match Scoreboard Component (Fallback - kept locally) ---
-const MatchScoreboard = ({ matches }) => {
-    if (!matches.length) return <p>No matches scheduled yet.</p>;
-    return (
-        <div style={{padding: '10px'}}>
-            <p style={{color: '#a0a0a0'}}>Standard Match Schedule List (Fallback)</p>
-        </div>
-    );
-};
 
 
 // --- Main Component ---
@@ -49,9 +46,14 @@ const TournamentViewPage = () => {
     // Check if the current user has permissions to edit scores or manage the tournament
     const hasAdminRights = userRole === 'admin' || userRole === 'coordinator';
 
+    const showToast = useToast();
     
+    const [unresolvedTies, setUnresolvedTies] = useState([]); // New state for managing unresolved tied matches
+    const [selectedTieWinners, setSelectedTieWinners] = useState({}); // New state to hold selected winners for tied matches
+
     const fetchMatches = useCallback(async () => {
         try {
+            console.log("Fetching matches for tournament ID:", id);
             const matchesRes = await axios.get(`http://localhost:5000/api/matches/${id}`, {
                  headers: token ? { 'x-auth-token': token } : {} 
             });
@@ -71,6 +73,7 @@ const TournamentViewPage = () => {
         }
         
         try {
+            console.log("Fetching tournament data for tournament ID:", id);
             const res = await axios.get(`http://localhost:5000/api/tournaments/${id}`, {
                  headers: token ? { 'x-auth-token': token } : {} 
             });
@@ -91,24 +94,73 @@ const TournamentViewPage = () => {
     }, [fetchTournamentData, id]);
     
     // --- Score Update Handler (Passed to children) ---
-    const handleScoreUpdate = async (matchId, teamAscore, teamBscore) => {
+    const handleScoreUpdate = async (matchId, scoreData) => {
         if (!hasAdminRights) {
             setError("Unauthorized to update scores.");
             return;
         }
+        
+        // Prevent score editing if tournament is completed
+        if (isCompleted) {
+            setError("Cannot edit scores. Tournament is completed.");
+            return;
+        }
+        
         try {
             await axios.put(`http://localhost:5000/api/matches/${matchId}/score`, 
-                { teamAscore, teamBscore, status: 'completed' },
+                scoreData,
                 { headers: { 'x-auth-token': token } }
             );
             
-            alert("Score saved successfully!");
+            showToast("Score saved successfully!", 'success');
             
-            await fetchMatches(); 
+            await fetchMatches();
             
         } catch (err) {
             console.error(`Failed to update score: ${err.response?.data?.msg || 'Server Error'}`);
             setError(err.response?.data?.msg || 'Failed to update score.');
+        }
+    };
+
+    // --- Check if current round is complete and generate next round ---
+    const checkAndGenerateNextRound = async () => {
+        // First, check for any completed knockout matches that are tied but don't have a winner yet
+        const tiedKnockoutMatches = matches.filter(match => {
+            if (tournamentData?.format !== 'single elimination' || match.status !== 'completed' || !Array.isArray(match.scores) || match.scores.length < 2) return false;
+            const scoreA = match.scores[0]?.score ?? 0;
+            const scoreB = match.scores[1]?.score ?? 0;
+            return scoreA === scoreB && !match.winner;
+        });
+
+        if (tiedKnockoutMatches.length > 0) {
+            setUnresolvedTies(tiedKnockoutMatches);
+            setError('Scores are tied in some matches. Please select a winner for all tied matches to proceed.');
+            return; // Stop here and wait for tie resolution
+        }
+        else{
+            alert("No tied matches found. Proceeding to generate next round.");
+        }
+
+        // Proceed with generation only if no unresolved ties
+        try {
+            // Call the API directly to generate next round
+            alert("Generating next round now.");
+            const res = await axios.post(`http://localhost:5000/api/matches/generate-next-round/${id}`, {}, {
+                headers: { 'x-auth-token': token }
+            });
+            //alert("Next round generated successfully."+res.data.msg);
+            if (res.data.isComplete) {
+                showToast(`🎉 Tournament Complete! Winner: ${res.data.winner}`, 'success');
+                await fetchTournamentData();
+            } else {
+                showToast(`✅ ${res.data.msg}`, 'info');
+                await fetchMatches();
+                // Also refresh tournament data to get updated status
+                await fetchTournamentData();
+            }
+        } catch (err) {
+            console.error("Next round generation error:", err.response?.data?.msg || 'Server Error');
+            setError(err.response?.data?.msg || 'Failed to generate next round.');
         }
     };
 
@@ -126,7 +178,7 @@ const TournamentViewPage = () => {
                 headers: { 'x-auth-token': token }
             });
 
-            alert(res.data.msg);
+            showToast(res.data.msg, 'success');
             fetchTournamentData(); 
         } catch (err) {
             console.error("Schedule Generation Error:", err.response || err);
@@ -145,6 +197,61 @@ const TournamentViewPage = () => {
         
         return completedMatches === totalMatches && totalMatches > 0;
     };
+
+    // --- Helper to determine if next round can be generated for knockout tournaments ---
+    const canGenerateNextRound = () => {
+        if (!matches.length || tournamentData?.format !== 'single elimination') return false;
+        
+        // Group matches by round
+        const matchesByRound = {};
+        matches.forEach(match => {
+            if (match.round) {
+                if (!matchesByRound[match.round]) {
+                    matchesByRound[match.round] = [];
+                }
+                matchesByRound[match.round].push(match);
+            }
+        });
+
+        // Find the current active round (has scheduled matches OR all completed matches)
+        let currentRound = null;
+        for (const [roundName, roundMatches] of Object.entries(matchesByRound)) {
+            // Check if this round has scheduled matches (active round)
+            if (roundMatches.some(match => match.status === 'scheduled')) {
+                currentRound = roundName;
+                break;
+            }
+        }
+
+        // If no scheduled matches found, check if there's a round where all matches are completed
+        if (!currentRound) {
+            for (const [roundName, roundMatches] of Object.entries(matchesByRound)) {
+                if (roundMatches.every(match => match.status === 'completed')) {
+                    currentRound = roundName;
+                    break;
+                }
+            }
+        }
+
+        if (!currentRound) return false;
+
+        // Check if all matches in current round are completed
+        const currentRoundMatches = matchesByRound[currentRound];
+        return currentRoundMatches.every(match => match.status === 'completed');
+    };
+
+    // --- Helper to determine if Final round is complete for knockout tournaments ---
+    const isFinalRoundComplete = () => {
+        if (!matches.length || tournamentData?.format !== 'single elimination') return false;
+        
+        // Find Final round matches
+        const finalMatches = matches.filter(match => match.round === 'Final');
+        
+        if (finalMatches.length === 0) return false;
+        
+        // Check if all Final matches are completed
+        return finalMatches.every(match => match.status === 'completed');
+    };
     
     // --- New handler to end the tournament ---
     const handleEndTournament = async () => {
@@ -153,15 +260,35 @@ const TournamentViewPage = () => {
         }
         
         try {
-            const championName = calculateLeaderboard(tournamentData, matches)[0]?.name || 'Unknown';
+            let championName = 'Unknown';
+            
+            if (isSingleElimination) {
+                // For knockout tournaments, find the winner from the Final match
+                const finalMatches = matches.filter(match => match.round === 'Final' && match.status === 'completed');
+                if (finalMatches.length > 0) {
+                    const finalMatch = finalMatches[0];
+                    if (Array.isArray(finalMatch.scores) && finalMatch.scores.length >= 2) {
+                        const scoreA = finalMatch.scores[0]?.score ?? 0;
+                        const scoreB = finalMatch.scores[1]?.score ?? 0;
+                        if (scoreA > scoreB) {
+                            championName = finalMatch.teams[0]?.name || 'Unknown';
+                        } else if (scoreB > scoreA) {
+                            championName = finalMatch.teams[1]?.name || 'Unknown';
+                        }
+                    }
+                }
+            } else {
+                // For round robin tournaments, use leaderboard
+                championName = calculateLeaderboard(tournamentData, matches)[0]?.name || 'Unknown';
+            }
             
             await axios.put(`http://localhost:5000/api/tournaments/${id}`, 
                 { status: 'completed', winner: championName }, 
                 { headers: { 'x-auth-token': token } }
             );
             
-            alert(`Tournament successfully set to COMPLETED. Champion: ${championName}`);
-            fetchTournamentData(); 
+            showToast(`🏆 Tournament Complete! ${championName} is the Champion! 🏆`, 'success');
+            await fetchTournamentData(); 
             
         } catch (err) {
             console.error("End Tournament Error:", err.response || err);
@@ -181,7 +308,10 @@ const TournamentViewPage = () => {
     const isSingleElimination = format === 'single elimination';
     const isRoundRobin = format === 'round robin'; 
     
-    const showEndTournamentButton = hasAdminRights && isRoundRobin && isRoundRobinComplete() && !isCompleted;
+    const showEndTournamentButton = hasAdminRights && (
+        (isRoundRobin && isRoundRobinComplete() && !isCompleted) ||
+        (isSingleElimination && isFinalRoundComplete() && !isCompleted)
+    );
 
     const renderFixtureView = () => {
         if (!isScheduleGenerated) {
@@ -189,34 +319,118 @@ const TournamentViewPage = () => {
         }
         
         // renderProps passes down all necessary state and handlers
-        const renderProps = { matches, fetchMatches, token, isTournamentCompleted: isCompleted, onScoreUpdate: handleScoreUpdate, hasAdminRights: hasAdminRights, tournamentData: tournamentData, isVisualization: activeView === 'visualization' };
+        const renderProps = { matches, fetchMatches, token, isTournamentCompleted: isCompleted, onScoreUpdate: handleScoreUpdate, hasAdminRights: hasAdminRights && !isCompleted, tournamentData: tournamentData };
         
-        // Render Visualization map for Knockout, or List for scoring/Round Robin
-        if (activeView === 'visualization' && isSingleElimination) {
-             return <KnockoutSchedule 
-                {...renderProps}
-                maxParticipants={maxParticipants}
-            />;
+        // Conditionally render scorecard based on tournament sport
+        switch (tournamentData.sport.toLowerCase()) {
+            case 'football':
+                return <RoundRobinSchedule {...renderProps} MatchCardComponent={FootballScorecard} />;
+            case 'cricket':
+                return <RoundRobinSchedule {...renderProps} MatchCardComponent={CricketScorecard} />;
+            case 'badminton':
+                return <RoundRobinSchedule {...renderProps} MatchCardComponent={BadmintonScorecard} />;
+            case 'kabaddi':
+                return <RoundRobinSchedule {...renderProps} MatchCardComponent={KabaddiScorecard} />;
+            case 'volleyball':
+                return <RoundRobinSchedule {...renderProps} MatchCardComponent={VolleyballScorecard} />;
+            case 'multi-sport':
+                // Multisport scorecard needs tournament data, not individual matches for score entry
+                return <MultisportScorecard 
+                            tournament={tournamentData} 
+                            onScoreUpdate={handleScoreUpdate} // This needs to be adapted for event-based scoring
+                            isTournamentCompleted={isCompleted} 
+                            hasAdminRights={hasAdminRights && !isCompleted} 
+                        />;
+            case 'group stage':
+                const GroupStageMatchCard = (() => {
+                    switch (tournamentData.sport.toLowerCase()) {
+                        case 'football': return FootballScorecard;
+                        case 'cricket': return CricketScorecard;
+                        case 'badminton': return BadmintonScorecard;
+                        case 'kabaddi': return KabaddiScorecard;
+                        case 'volleyball': return VolleyballScorecard;
+                        default: return null;
+                    }
+                })();
+                if (!GroupStageMatchCard) {
+                    return <p style={{color: '#ff6b6b'}}>No specific scorecard available for {tournamentData.sport} in Group Stage.</p>;
+                }
+                return <GroupStageSchedule {...renderProps} MatchCardComponent={GroupStageMatchCard} />;
+            default:
+                return <p style={{color: '#ff6b6b'}}>No specific scorecard available for {tournamentData.sport}.</p>;
         }
-        
-        // This is the default (and score entry) view for both formats
-        if (isSingleElimination || isRoundRobin) { 
-            return <RoundRobinSchedule {...renderProps} />;
+    };
+
+    const handleTieWinnerSelection = (matchId, winnerId) => {
+        setSelectedTieWinners(prev => ({
+            ...prev,
+            [matchId]: winnerId
+        }));
+    };
+
+    const handleTieResolution = async () => {
+        if (!hasAdminRights) {
+            setError("Unauthorized to resolve ties.");
+            return;
         }
-        
-        return <MatchScoreboard {...renderProps} />;
+
+        if (Object.keys(selectedTieWinners).length !== unresolvedTies.length) {
+            setError("Please select a winner for all tied matches.");
+            return;
+        }
+
+        try {
+            const matchIdsToUpdate = unresolvedTies.map(match => match._id);
+            const winnerIds = matchIdsToUpdate.map(matchId => selectedTieWinners[matchId]);
+
+            await axios.put(`http://localhost:5000/api/matches/resolve-ties/${id}`, {
+                matchIds: matchIdsToUpdate,
+                winnerIds: winnerIds
+            }, { headers: { 'x-auth-token': token } });
+
+            showToast("Ties resolved and next round generated!", 'success');
+            await fetchTournamentData();
+            setUnresolvedTies([]);
+            setSelectedTieWinners({});
+
+        } catch (err) {
+            console.error("Tie Resolution Error:", err.response || err);
+            setError(err.response?.data?.msg || 'Failed to resolve ties.');
+        }
     };
 
     return (
         <div style={containerStyles}>
-            {userRole === 'admin' && (
-                <button style={backButtonStyles} onClick={() => navigate('/admin-dashboard')}>
-                    ← Back to Dashboard
-                </button>
-            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', marginBottom: '20px' }}>
+                {userRole === 'admin' && (
+                    <button style={backButtonStyles} onClick={() => navigate('/admin-dashboard')}>
+                        ← Back to Dashboard
+                    </button>
+                )}
+            </div>
             <h1 style={headerStyles}>
                 {name.toUpperCase()} ({sport.toUpperCase()})
             </h1>
+            
+            {/* Champion Display for Completed Tournaments */}
+            {isCompleted && tournamentData.winner && (
+                <div style={{
+                    backgroundColor: '#1a1a1a',
+                    border: '2px solid #00ffaa',
+                    borderRadius: '10px',
+                    padding: '20px',
+                    marginBottom: '20px',
+                    textAlign: 'center'
+                }}>
+                    <div style={{ fontSize: '2em', marginBottom: '10px' }}>🏆</div>
+                    <h2 style={{ color: '#00ffaa', margin: '0 0 10px 0' }}>
+                        Tournament Complete!
+                    </h2>
+                    <p style={{ color: '#e0e0e0', fontSize: '1.2em', margin: 0 }}>
+                        <strong>{tournamentData.winner}</strong> is the Champion! 🏆
+                    </p>
+                </div>
+            )}
             
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '30px' }}>
                 <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -230,6 +444,20 @@ const TournamentViewPage = () => {
                     {hasAdminRights && !isScheduleGenerated && displayStatus.toLowerCase() !== 'ongoing' && !isCompleted && (
                         <button style={generateButtonStyles} onClick={handleGenerateSchedule}>
                             Generate Schedule
+                        </button>
+                    )}
+                    
+                    {hasAdminRights && isScheduleGenerated && isSingleElimination && !isCompleted && (
+                        <button 
+                            style={{
+                                ...generateButtonStyles,
+                                backgroundColor: canGenerateNextRound() ? '#00ffaa' : '#666',
+                                cursor: canGenerateNextRound() ? 'pointer' : 'not-allowed'
+                            }} 
+                            onClick={checkAndGenerateNextRound}
+                            disabled={!canGenerateNextRound()}
+                        >
+                            Generate Next Round
                         </button>
                     )}
                 </div>
@@ -250,15 +478,6 @@ const TournamentViewPage = () => {
                     Fixtures (Score Entry)
                 </button>
                 
-                {/* New Visualization Tab */}
-                {isSingleElimination && (
-                    <button 
-                        style={tabButtonStyles(activeView === 'visualization')} 
-                        onClick={() => setActiveView('visualization')}
-                    >
-                        Knockout Map (View)
-                    </button>
-                )}
                 
                 {!isSingleElimination && (
                     <button 
@@ -275,20 +494,77 @@ const TournamentViewPage = () => {
                 <h2 style={titleStyles}>
                     {activeView === 'list' 
                         ? `${isSingleElimination ? 'Score Entry List' : 'Match Schedule'}` 
-                        : activeView === 'visualization' 
-                        ? 'Knockout Progress Map'
                         : 'Current Standings'
                     }
                 </h2>
                 
                 {/* Render the correct component based on the active view */}
-                {(activeView === 'list' || activeView === 'visualization') && renderFixtureView()}
+                {activeView === 'list' && renderFixtureView()}
                 
-                {activeView === 'leaderboard' && <Leaderboard tournament={tournamentData} matches={matches} />}
+                {activeView === 'leaderboard' && (
+                    <Leaderboard tournament={tournamentData} matches={matches} />
+                )}
 
             </div>
             
             {error && <p style={{ color: '#ff6b6b', marginTop: '15px' }}>{error}</p>}
+
+            {/* Tie Resolution UI */}
+            {unresolvedTies.length > 0 && (
+                <div style={{ 
+                    backgroundColor: '#1a1a1a', 
+                    padding: '25px', 
+                    borderRadius: '10px', 
+                    marginTop: '20px',
+                    border: '2px solid #ff6b6b'
+                }}>
+                    <h3 style={{ color: '#ff6b6b', marginBottom: '15px' }}>Unresolved Tied Matches</h3>
+                    <p style={{ color: '#e0e0e0', marginBottom: '20px' }}>Scores are tied in the following knockout matches. Please select a winner for each to proceed to the next round.</p>
+
+                    {unresolvedTies.map(tiedMatch => (
+                        <div key={tiedMatch._id} style={{ marginBottom: '20px', padding: '15px', border: '1px solid #333', borderRadius: '8px' }}>
+                            <p style={{ color: '#00ffaa', fontWeight: 'bold', marginBottom: '10px' }}>
+                                Match: {tiedMatch.teams[0]?.name || 'Team 1'} vs {tiedMatch.teams[1]?.name || 'Team 2'} (Round: {tiedMatch.round})
+                            </p>
+                            <div style={{ display: 'flex', gap: '20px', justifyContent: 'center' }}>
+                                <label style={{ color: '#e0e0e0', display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                                    <input 
+                                        type="checkbox" 
+                                        checked={selectedTieWinners[tiedMatch._id] === tiedMatch.teams[0]?._id}
+                                        onChange={() => handleTieWinnerSelection(tiedMatch._id, tiedMatch.teams[0]?._id)}
+                                        style={{ marginRight: '8px', transform: 'scale(1.2)' }}
+                                    />
+                                    {tiedMatch.teams[0]?.name || 'Team 1'}
+                                </label>
+                                <label style={{ color: '#e0e0e0', display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                                    <input 
+                                        type="checkbox" 
+                                        checked={selectedTieWinners[tiedMatch._id] === tiedMatch.teams[1]?._id}
+                                        onChange={() => handleTieWinnerSelection(tiedMatch._id, tiedMatch.teams[1]?._id)}
+                                        style={{ marginRight: '8px', transform: 'scale(1.2)' }}
+                                    />
+                                    {tiedMatch.teams[1]?.name || 'Team 2'}
+                                </label>
+                            </div>
+                        </div>
+                    ))}
+
+                    <button 
+                        style={{ 
+                            ...updateButtonStyles, 
+                            marginTop: '20px', 
+                            width: 'auto', 
+                            padding: '10px 30px',
+                            backgroundColor: Object.keys(selectedTieWinners).length === unresolvedTies.length ? '#00ffaa' : '#666',
+                            cursor: Object.keys(selectedTieWinners).length === unresolvedTies.length ? 'pointer' : 'not-allowed'
+                        }}
+                        onClick={handleTieResolution}
+                        disabled={Object.keys(selectedTieWinners).length !== unresolvedTies.length}
+                    >
+                        Confirm Resolutions and Generate Next Round
+                    </button>
+                </div>
+            )}
 
         </div>
     );

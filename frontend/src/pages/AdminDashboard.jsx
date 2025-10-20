@@ -8,6 +8,7 @@ import CreateTournamentForm from '../components/admin/CreateTournamentForm';
 import ManageParticipantsForm from '../components/admin/ManageParticipantsForm';
 import TournamentList from '../components/admin/TournamentList';
 import ManageCoordinators from '../components/admin/ManageCoordinators';
+import MultiSportSetup from '../components/admin/MultiSportSetup';
 // ------------------------------------
 
 // --- Global Functions to get data from Local Storage ---
@@ -25,6 +26,8 @@ const usernameHighlightStyles = { color: '#00ffaa', marginLeft: '15px' };
 const headerWrapperStyles = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' };
 const logoutButtonStyles = { padding: '10px 15px', backgroundColor: '#00ffaa', color: '#1a1a1a', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', transition: 'background-color 0.2s' };
 
+// Re-import useToast for the new function
+import { useToast } from '../components/shared/ToastNotification';
 
 // --- MAIN ADMIN DASHBOARD COMPONENT ---
 
@@ -32,6 +35,7 @@ const AdminDashboard = () => {
     const navigate = useNavigate();
     const token = getAdminToken(); 
     const loggedInUsername = LOGGED_IN_USERNAME; 
+    const showToast = useToast(); // Initialize useToast here
     
     const [currentView, setCurrentView] = useState('view'); // Default to view list
     const [selectedTournament, setSelectedTournament] = useState(null); 
@@ -60,6 +64,12 @@ const AdminDashboard = () => {
                     return <p style={errorStyles}>Please select a tournament.</p>
                 }
                 return <ManageParticipantsForm tournament={selectedTournament} token={token} setView={setCurrentView} />;
+            case 'multi-sport-setup':
+                if (!selectedTournament) {
+                    setCurrentView('view');
+                    return <p style={errorStyles}>Please select a tournament.</p>
+                }
+                return <MultiSportSetup tournament={selectedTournament} setView={setCurrentView} token={token} />;
             case 'coordinators':
                 return <ManageCoordinators token={token} />;
             case 'home':
@@ -73,24 +83,28 @@ const AdminDashboard = () => {
     return (
         <div style={containerStyles}>
             
-            <div style={headerWrapperStyles}>
-                <div style={welcomeMessageStyles}>
-                    Welcome, Admin 
-                    <span style={usernameHighlightStyles}>({loggedInUsername})</span>
-                </div>
+            {currentView !== 'manage-participants' && currentView !== 'multi-sport-setup' && (
+                <>
+                    <div style={headerWrapperStyles}>
+                        <div style={welcomeMessageStyles}>
+                            Welcome, Admin 
+                            <span style={usernameHighlightStyles}>({loggedInUsername})</span>
+                        </div>
 
-                <button style={logoutButtonStyles} onClick={handleLogout}>
-                    Logout
-                </button>
-            </div>
-            
-            <h1 style={headerStyles}>Admin Dashboard - Tournament Management</h1>
-            
-            <div style={buttonGroupStyles}>
-                <button style={buttonStyles} onClick={() => setCurrentView('create-tournament')}>Create New Tournament</button>
-                <button style={buttonStyles} onClick={() => setCurrentView('view')}>View All Tournaments</button>
-                <button style={buttonStyles} onClick={() => setCurrentView('coordinators')}>Manage Coordinators</button>
-            </div>
+                        <button style={logoutButtonStyles} onClick={handleLogout}>
+                            Logout
+                        </button>
+                    </div>
+                    
+                    <h1 style={headerStyles}>Admin Dashboard - Tournament Management</h1>
+                    
+                    <div style={buttonGroupStyles}>
+                        <button style={buttonStyles} onClick={() => setCurrentView('create-tournament')}>Create New Tournament</button>
+                        <button style={buttonStyles} onClick={() => setCurrentView('view')}>View All Tournaments</button>
+                        <button style={buttonStyles} onClick={() => setCurrentView('coordinators')}>Manage Coordinators</button>
+                    </div>
+                </>
+            )}
 
             <div className="content">
                 {renderContent()}

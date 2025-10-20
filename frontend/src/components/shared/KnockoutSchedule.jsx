@@ -33,15 +33,24 @@ const roundColumnStyles = {
 
 // --- HELPER LOGIC ---
 
+// Helper to get score for a team from the new scores array format
+const getScoreForTeam = (scores, teamId) => {
+    if (!Array.isArray(scores)) return 0;
+    const entry = scores.find(s => String(s.teamId) === String(teamId));
+    return entry ? entry.score : 0;
+};
+
 const getWinnerInfo = (match) => {
-    if (!match || match.status !== 'completed' || !match.scores) return { name: 'TBD', teamId: null }; 
-    
-    const scoreA = match.scores.teamA || 0;
-    const scoreB = match.scores.teamB || 0;
-    
-    if (scoreA > scoreB) return { name: match.teams[0]?.name || 'TBD', teamId: match.teams[0]?._id };
-    if (scoreB > scoreA) return { name: match.teams[1]?.name || 'TBD', teamId: match.teams[1]?._id };
-    return { name: 'TBD (Tie)', teamId: null }; 
+    if (!match || match.status !== 'completed' || !match.scores) return { name: 'TBD', teamId: null };
+
+    const teamAId = match.teams[0]?._id || match.teams[0];
+    const teamBId = match.teams[1]?._id || match.teams[1];
+    const scoreA = getScoreForTeam(match.scores, teamAId);
+    const scoreB = getScoreForTeam(match.scores, teamBId);
+
+    if (scoreA > scoreB) return { name: match.teams[0]?.name || 'TBD', teamId: teamAId };
+    if (scoreB > scoreA) return { name: match.teams[1]?.name || 'TBD', teamId: teamBId };
+    return { name: 'TBD (Tie)', teamId: null };
 };
 
 

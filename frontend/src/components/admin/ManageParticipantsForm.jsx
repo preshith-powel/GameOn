@@ -112,8 +112,10 @@ const ManageParticipantsForm = ({ tournament, token, setView }) => {
                         return participantData;
                     });
                 } else {
-                    initialList = Array.from({ length: fullTourney.maxParticipants }, (_, i) => ({ 
-                        id: i + 1, name: '', managerId: isTeams ? '' : undefined, 
+                    initialList = Array.from({ length: fullTourney.maxParticipants }, (_, i) => ({
+                        id: i + 1, 
+                        name: isTeams ? '' : `Player ${i + 1}`, // Default name for players
+                        managerId: isTeams ? '' : undefined,
                     }));
                 }
                 
@@ -151,7 +153,10 @@ const ManageParticipantsForm = ({ tournament, token, setView }) => {
             if (isTeams) { return { teamName: p.name, managerId: p.managerId }; } else { return { name: p.name }; }
         });
         
-        if (dataToSend.some(item => (isTeams && (!item.teamName || !item.managerId)) || (!isTeams && !item.name))) {
+        if (dataToSend.some(item => 
+            (isTeams && (!item.teamName || !item.managerId)) || 
+            (!isTeams && (!item.name || item.name.trim() === '')) // Ensure player name is not empty or just whitespace
+        )) {
              setError(`Please fill all required slots (Name ${isTeams ? 'and Manager ID' : ''}).`);
              setLoading(false);
              return;
@@ -190,12 +195,70 @@ const ManageParticipantsForm = ({ tournament, token, setView }) => {
 
     return (
         <div style={formContainerStyles}>
-            <h2>Register Participants for: {tournament.name}</h2>
-            <p>Type: **{tournament.participantsType.toUpperCase()}** | Slots: **{participantsList.length}**</p> 
-            
-            <p style={{marginTop: '10px', fontSize: '0.9em', color: isLocked ? '#00ffaa' : '#fff000'}}>
-                Status: **{isLocked ? 'LOCKED' : 'EDITING'}**
-            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '20px' }}>
+                <button 
+                    type="button" 
+                    style={{...buttonStyles, backgroundColor: '#333', color: '#fff'}} 
+                    onClick={() => setView('view')}
+                >
+                    ← Back to Tournament List
+                </button>
+            </div>
+
+            <div style={{ textAlign: 'center', marginBottom: '30px' }}>
+                <h2 style={{ fontSize: '2.5em', textTransform: 'uppercase', color: '#e0e0e0', marginBottom: '10px' }}>
+                    Register Participants for: 
+                    <span style={{ 
+                        backgroundColor: '#00ffaa', 
+                        color: '#1a1a1a', 
+                        padding: '5px 15px', 
+                        borderRadius: '8px', 
+                        marginLeft: '10px', 
+                        fontWeight: 'bold' 
+                    }}>{tournament.name}</span>
+                </h2>
+                
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '15px', marginTop: '20px' }}>
+                    {/* PARTICIPANTS TYPE */}
+                    <div style={{ 
+                        backgroundColor: '#006400', // Darker green
+                        color: '#ffffff', 
+                        padding: '8px 15px', 
+                        borderRadius: '8px', 
+                        fontWeight: 'bold', 
+                        textTransform: 'uppercase',
+                        fontSize: '1.1em'
+                    }}>
+                        PARTICIPANTS : {tournament.participantsType}
+                    </div>
+
+                    {/* SLOTS */}
+                    <div style={{ 
+                        backgroundColor: '#4682b4', // Azure blue
+                        color: '#ffffff', 
+                        padding: '8px 15px', 
+                        borderRadius: '8px', 
+                        fontWeight: 'bold', 
+                        textTransform: 'uppercase',
+                        fontSize: '1.1em'
+                    }}>
+                        SLOTS : {participantsList.length}
+                    </div>
+
+                    {/* STATUS */}
+                    <div style={{ 
+                        backgroundColor: '#cd5c5c', // Pinkish light red
+                        color: '#ffffff', 
+                        padding: '8px 15px', 
+                        borderRadius: '8px', 
+                        fontWeight: 'bold', 
+                        textTransform: 'uppercase',
+                        fontSize: '1.1em'
+                    }}>
+                        STATUS : {isLocked ? 'LOCKED' : 'EDITING'}
+                    </div>
+                </div>
+            </div>
             
             <form onSubmit={handleSubmit} style={{ marginTop: '20px' }}>
                 
@@ -242,25 +305,11 @@ const ManageParticipantsForm = ({ tournament, token, setView }) => {
                 {success && <p style={successStyles}>Success: {success}</p>}
             </form>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '30px', alignItems: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '30px', alignItems: 'center' }}>
                 
-                <button 
-                    type="button" 
-                    style={{...buttonStyles, backgroundColor: '#333', color: '#fff'}} 
-                    onClick={() => setView('view')}
-                >
-                    ← Back to Tournament List
-                </button>
                 
                 <div style={{ display: 'flex', gap: '15px' }}>
-                    {(isLocked && allReady && tournament.status.toLowerCase() === 'pending') && ( 
-                        <button 
-                            style={startTournamentButtonStyles}
-                            onClick={() => handleStartTournament(tournament._id)} 
-                        >
-                            Start Tournament
-                        </button>
-                    )}
+                    
                     {actionButton}
                 </div>
             </div>

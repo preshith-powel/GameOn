@@ -17,40 +17,61 @@ const RoundRobinSchedule = ({ matches, fetchMatches, token, isTournamentComplete
     const groupMatchesByRound = (allMatches) => {
         if (allMatches.length === 0) return {};
         
-        const totalMatches = allMatches.length;
-        
-        // 1. Calculate Total Participants (N):
-        const N = Math.ceil((1 + Math.sqrt(1 + 8 * totalMatches)) / 2);
-
-        // 2. Calculate Matches Per Round (Round size is always N/2, rounded up for odd participants)
-        const matchesPerRound = Math.ceil(N / 2);
-        
         const rounds = {};
-        let roundNumber = 1;
-        let matchCountInCurrentRound = 0;
         
-        for(let i = 0; i < allMatches.length; i++) {
-            const roundName = `Round ${roundNumber}`;
-            
-            if (!rounds[roundName]) {
-                rounds[roundName] = [];
+        // Group matches by their round field (for knockout tournaments)
+        allMatches.forEach(match => {
+            if (match.round) {
+                if (!rounds[match.round]) {
+                    rounds[match.round] = [];
+                }
+                rounds[match.round].push(match);
+            } else {
+                // Fallback for round robin tournaments without round field
+                const totalMatches = allMatches.length;
+                const N = Math.ceil((1 + Math.sqrt(1 + 8 * totalMatches)) / 2);
+                const matchesPerRound = Math.ceil(N / 2);
+                
+                // Calculate which round this match belongs to
+                const matchIndex = allMatches.indexOf(match);
+                const roundNumber = Math.floor(matchIndex / matchesPerRound) + 1;
+                const roundName = `Round ${roundNumber}`;
+                
+                if (!rounds[roundName]) {
+                    rounds[roundName] = [];
+                }
+                rounds[roundName].push(match);
             }
-            rounds[roundName].push(allMatches[i]);
-            matchCountInCurrentRound++;
-
-            // If we have reached the calculated size for a round, start the next round
-            if (matchCountInCurrentRound === matchesPerRound) {
-                roundNumber++;
-                matchCountInCurrentRound = 0; // Reset counter for the next round
-            }
-        }
+        });
+        
         return rounds;
     };
 
 
     useEffect(() => {
         const groups = groupMatchesByRound(matches);
-        const names = Object.keys(groups).sort();
+        
+        // Sort round names in tournament order (for knockout tournaments)
+        const names = Object.keys(groups).sort((a, b) => {
+            const roundOrder = {
+                'Round of 64': 1,
+                'Round of 32': 2,
+                'Round of 16': 3,
+                'Quarterfinal': 4,
+                'Semifinal': 5,
+                'Final': 6
+            };
+            
+            const aOrder = roundOrder[a] || 999;
+            const bOrder = roundOrder[b] || 999;
+            
+            if (aOrder !== bOrder) {
+                return aOrder - bOrder;
+            }
+            
+            // For rounds with same order, sort alphabetically
+            return a.localeCompare(b);
+        });
         
         setMatchesByRound(groups);
         setRoundNames(names);
@@ -70,8 +91,9 @@ const RoundRobinSchedule = ({ matches, fetchMatches, token, isTournamentComplete
     };
 
     // This handler simply passes the update up to the parent TournamentViewPage
-    const handleScoreUpdate = (matchId, teamAscore, teamBscore) => {
-        onScoreUpdate(matchId, teamAscore, teamBscore);
+    // Pass through the scoreData object from MatchCard directly
+    const handleScoreUpdate = (matchId, scoreData) => {
+        onScoreUpdate(matchId, scoreData);
     };
 
 

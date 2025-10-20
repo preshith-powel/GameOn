@@ -15,12 +15,17 @@ const ADMIN_MIDDLEWARE = [auth.protect, auth.checkRole('admin')];
 router.post('/', ...ADMIN_MIDDLEWARE, async (req, res) => {
     try {
         const { name, sport, format, startDate, endDate, participantsType, maxParticipants, playersPerTeam, liveScoreEnabled, venueType, venues } = req.body;
-
+        console.log("[DEBUG - Backend] Incoming tournament creation request body:", req.body);
         const newTournament = new Tournament({
             name, sport, format, startDate, endDate, participantsType, maxParticipants, playersPerTeam, liveScoreEnabled, venueType, venues,
-            adminId: req.user.id
+            adminId: req.user.id,
+            // Add group stage specific fields if present in req.body
+            numGroups: req.body.numGroups,
+            teamsPerGroup: req.body.teamsPerGroup,
+            roundRobinMatchesPerGroup: req.body.roundRobinMatchesPerGroup,
+            winnersPerGroup: req.body.winnersPerGroup,
         });
-
+        console.log("[DEBUG - Backend] Tournament object before save:", newTournament);
         const tournament = await newTournament.save();
         res.json(tournament);
     } catch (err) {

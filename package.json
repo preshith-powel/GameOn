@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "@tailwindcss/cli": "^4.1.13"
+    "@tailwindcss/cli": "^4.1.13",
+    "react-transition-group": "^4.4.5"
   }
 }
