@@ -15,6 +15,7 @@ const matchSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     refPath: 'participantsType'
   }],
+  // For most sports, scores is an array of { teamId, score }
   scores: [
     {
       teamId: {
@@ -29,6 +30,15 @@ const matchSchema = new mongoose.Schema({
       }
     }
   ],
+  // For badminton: store up to 3 sets per match, each set is { setNumber, teamAScore, teamBScore }
+  sets: [
+    {
+      setNumber: { type: Number, required: true },
+      teamAScore: { type: Number, required: true, default: 0 },
+      teamBScore: { type: Number, required: true, default: 0 }
+    }
+  ],
+  completedSets: { type: Number, default: 0 },
   winner: { // To store the ID of the winning team/player in case of a tie-breaker
     type: mongoose.Schema.Types.ObjectId,
     refPath: 'participantsType',

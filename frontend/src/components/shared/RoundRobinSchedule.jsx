@@ -1,14 +1,14 @@
 // frontend/src/components/shared/RoundRobinSchedule.jsx - FINAL CORRECTED CODE
 
 import React, { useState, useEffect } from 'react';
-import MatchCard from './MatchCard'; 
+// Use the passed-in MatchCardComponent for sport-specific scorecards
 // *** FINAL FIX: Import styles from the dedicated TournamentStyles file ***
 import { 
     roundTabStyles 
 } from './TournamentStyles'; 
 
 
-const RoundRobinSchedule = ({ matches, fetchMatches, token, isTournamentCompleted, onScoreUpdate, hasAdminRights }) => {
+const RoundRobinSchedule = ({ matches, fetchMatches, token, isTournamentCompleted, onScoreUpdate, hasAdminRights, MatchCardComponent }) => {
     const [matchesByRound, setMatchesByRound] = useState({});
     const [roundNames, setRoundNames] = useState([]);
     const [activeRound, setActiveRound] = useState(null);
@@ -120,12 +120,12 @@ const RoundRobinSchedule = ({ matches, fetchMatches, token, isTournamentComplete
             {/* Matches for Active Round - Vertical Stacking */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginTop: '20px', width: '100%' }}>
                 {activeRoundMatches.map(match => (
-                    <MatchCard 
-                        key={match._id} 
-                        match={match} 
-                        onScoreUpdate={handleScoreUpdate} // Pass local handler down
+                    <MatchCardComponent
+                        key={match._id}
+                        match={match}
+                        onScoreUpdate={handleScoreUpdate}
                         isTournamentCompleted={isTournamentCompleted}
-                        hasAdminRights={hasAdminRights} // Pass down scoring rights
+                        hasAdminRights={hasAdminRights}
                     />
                 ))}
             </div>

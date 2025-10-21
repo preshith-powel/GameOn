@@ -140,13 +140,12 @@ const TournamentViewPage = () => {
             return; // Stop here and wait for tie resolution
         }
         else{
-            alert("No tied matches found. Proceeding to generate next round.");
+            alert("Generating next round now.");
         }
 
         // Proceed with generation only if no unresolved ties
         try {
             // Call the API directly to generate next round
-            alert("Generating next round now.");
             const res = await axios.post(`http://localhost:5000/api/matches/generate-next-round/${id}`, {}, {
                 headers: { 'x-auth-token': token }
             });

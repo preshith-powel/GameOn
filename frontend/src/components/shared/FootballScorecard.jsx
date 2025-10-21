@@ -2,13 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { updateButtonStyles, scoreFieldStyles, rrScoreInputStyles } from './TournamentStyles';
 
 const FootballScorecard = ({ match, onScoreUpdate, isTournamentCompleted, hasAdminRights }) => {
-  const [teamAscore, setTeamAscore] = useState(match.scores?.teamA || 0);
-  const [teamBscore, setTeamBscore] = useState(match.scores?.teamB || 0);
+  // Helper to get score for a team from the scores array
+  const getScoreForTeam = (team) => {
+    const teamId = team?._id || team;
+    const entry = Array.isArray(match.scores)
+      ? match.scores.find(s => String(s.teamId) === String(teamId) || String(s.teamId?._id) === String(teamId))
+      : null;
+    return entry ? entry.score : 0;
+  };
+
+  const [teamAscore, setTeamAscore] = useState(getScoreForTeam(match.teams[0]));
+  const [teamBscore, setTeamBscore] = useState(getScoreForTeam(match.teams[1]));
   const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
-    setTeamAscore(match.scores?.teamA || 0);
-    setTeamBscore(match.scores?.teamB || 0);
+    setTeamAscore(getScoreForTeam(match.teams[0]));
+    setTeamBscore(getScoreForTeam(match.teams[1]));
     setIsEditing(false); // Reset editing state when match data changes
   }, [match]);
 
@@ -17,17 +26,20 @@ const FootballScorecard = ({ match, onScoreUpdate, isTournamentCompleted, hasAdm
 
     let winnerId = null;
     if (teamAscore > teamBscore) {
-        winnerId = match.teams[0]?._id; 
+        winnerId = match.teams[0]?._id || match.teams[0];
     } else if (teamBscore > teamAscore) {
-        winnerId = match.teams[1]?._id; 
+        winnerId = match.teams[1]?._id || match.teams[1];
     }
     // If scores are tied, winnerId remains null, requiring manual tie-breaking in TournamentViewPage
 
+    const scores = [
+      { teamId: match.teams[0]?._id || match.teams[0], score: teamAscore },
+      { teamId: match.teams[1]?._id || match.teams[1], score: teamBscore }
+    ];
     const scoreData = {
-      scoreA: teamAscore,
-      scoreB: teamBscore,
-      status: 'completed', // Football matches are typically completed once scores are entered
-      winner: winnerId,
+      scores,
+      status: 'completed',
+      winnerId: winnerId,
     };
     await onScoreUpdate(match._id, scoreData);
     setIsEditing(false);
@@ -49,13 +61,29 @@ const FootballScorecard = ({ match, onScoreUpdate, isTournamentCompleted, hasAdm
         <h4 style={{ color: '#00ffaa' }}>{match.teams[0]?.name || 'Team A'}</h4>
         
         {isEditing ? (
-          <input 
-            type="number" 
-            value={teamAscore} 
-            onChange={(e) => setTeamAscore(Number(e.target.value))}
-            style={rrScoreInputStyles}
-            min="0"
-          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <button
+              type="button"
+              onClick={() => setTeamAscore(Math.max(0, teamAscore - 1))}
+              style={{ background: '#39ff14', color: '#222', border: 'none', borderRadius: 4, width: 24, height: 24, fontWeight: 'bold', cursor: 'pointer', marginRight: 2 }}
+            >
+              -
+            </button>
+            <input 
+              type="number" 
+              value={teamAscore} 
+              onChange={(e) => setTeamAscore(Number(e.target.value))}
+              style={rrScoreInputStyles}
+              min="0"
+            />
+            <button
+              type="button"
+              onClick={() => setTeamAscore(teamAscore + 1)}
+              style={{ background: '#39ff14', color: '#222', border: 'none', borderRadius: 4, width: 24, height: 24, fontWeight: 'bold', cursor: 'pointer', marginLeft: 2 }}
+            >
+              +
+            </button>
+          </div>
         ) : (
           <p style={scoreFieldStyles}>{teamAscore}</p>
         )}
@@ -63,13 +91,29 @@ const FootballScorecard = ({ match, onScoreUpdate, isTournamentCompleted, hasAdm
         <span style={{ color: '#e0e0e0', margin: '0 10px' }}>-</span>
 
         {isEditing ? (
-          <input 
-            type="number" 
-            value={teamBscore} 
-            onChange={(e) => setTeamBscore(Number(e.target.value))}
-            style={rrScoreInputStyles}
-            min="0"
-          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <button
+              type="button"
+              onClick={() => setTeamBscore(Math.max(0, teamBscore - 1))}
+              style={{ background: '#39ff14', color: '#222', border: 'none', borderRadius: 4, width: 24, height: 24, fontWeight: 'bold', cursor: 'pointer', marginRight: 2 }}
+            >
+              -
+            </button>
+            <input 
+              type="number" 
+              value={teamBscore} 
+              onChange={(e) => setTeamBscore(Number(e.target.value))}
+              style={rrScoreInputStyles}
+              min="0"
+            />
+            <button
+              type="button"
+              onClick={() => setTeamBscore(teamBscore + 1)}
+              style={{ background: '#39ff14', color: '#222', border: 'none', borderRadius: 4, width: 24, height: 24, fontWeight: 'bold', cursor: 'pointer', marginLeft: 2 }}
+            >
+              +
+            </button>
+          </div>
         ) : (
           <p style={scoreFieldStyles}>{teamBscore}</p>
         )}
