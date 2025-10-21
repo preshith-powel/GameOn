@@ -511,16 +511,22 @@ router.post('/generate-knockout-stage/:tournamentId', ...ADMIN_COORDINATOR_MIDDL
             });
 
             groupMatches.filter(m => m.status === 'completed' && m.scores && m.teams?.length === 2).forEach(match => {
-                const idA = match.teams[0]?._id.toString();
-                const idB = match.teams[1]?._id.toString();
+                const idA = match.teams[0]?._id?.toString?.() || match.teams[0]?.toString();
+                const idB = match.teams[1]?._id?.toString?.() || match.teams[1]?.toString();
 
                 if (!statsMap.has(idA) || !statsMap.has(idB)) return;
 
                 const statA = statsMap.get(idA);
                 const statB = statsMap.get(idB);
 
-                const scoreA = match.scores.teamA || 0;
-                const scoreB = match.scores.teamB || 0;
+                // Find scores for each team from the scores array
+                let scoreA = 0, scoreB = 0;
+                if (Array.isArray(match.scores)) {
+                    for (const entry of match.scores) {
+                        if (entry.teamId?.toString() === idA) scoreA = entry.score;
+                        if (entry.teamId?.toString() === idB) scoreB = entry.score;
+                    }
+                }
 
                 statA.p += 1;
                 statB.p += 1;

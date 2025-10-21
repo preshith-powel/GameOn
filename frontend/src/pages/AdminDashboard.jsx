@@ -101,7 +101,7 @@ const AdminDashboard = () => {
                     <div style={buttonGroupStyles}>
                         <button style={buttonStyles} onClick={() => setCurrentView('create-tournament')}>Create New Tournament</button>
                         <button style={buttonStyles} onClick={() => setCurrentView('view')}>View All Tournaments</button>
-                        <button style={buttonStyles} onClick={() => setCurrentView('coordinators')}>Manage Coordinators</button>
+                        {/* <button style={buttonStyles} onClick={() => setCurrentView('coordinators')}>Manage Coordinators</button> */}
                     </div>
                 </>
             )}

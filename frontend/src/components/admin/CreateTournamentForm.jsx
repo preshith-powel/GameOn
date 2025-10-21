@@ -252,8 +252,8 @@ const CreateTournamentForm = ({ setView, token }) => {
                         >
                             <option value="single elimination" disabled={formData.sport === 'multi-sport' || formData.sport === 'chess'}>Single Elimination</option>
                             <option value="round robin" disabled={formData.sport === 'multi-sport' || formData.sport === 'chess'}>Round Robin</option>
-                            <option value="group stage" disabled={formData.sport === 'multi-sport' || formData.sport === 'chess'}>Group Stage</option>
-                            <option value="aggregate scoring" disabled={formData.sport !== 'multi-sport'}>Aggregate Scoring Method</option>
+                            {/* <option value="group stage" disabled={formData.sport === 'multi-sport' || formData.sport === 'chess'}>Group Stage</option> */}
+                          {/* <option value="aggregate scoring" disabled={formData.sport !== 'multi-sport'}>Aggregate Scoring Method</option> */}
                         </select>
                     </div>
                 </div>
@@ -398,43 +398,25 @@ const CreateTournamentForm = ({ setView, token }) => {
                         </div>
                     )} */}
                 </div>
-                <div style={inputGroupStyles}><label style={labelStyles} htmlFor="venueType">Venue Type</label><select style={selectStyles} id="venueType" name="venueType" value={formData.venueType} onChange={handleChange} required><option value="off">No Venue</option><option value="single">Single Venue</option><option value="multi">Multiple Venues</option></select></div>
+                <div style={inputGroupStyles}><label style={labelStyles} htmlFor="venueType">Venue Type</label><select style={selectStyles} id="venueType" name="venueType" value={formData.venueType} onChange={handleChange} required><option value="off">No Venue</option><option value="single">Single Venue</option></select></div>
                 
                 {(formData.sport === 'multi-sport') ? (
                     <MultiSportSetup 
                         tournamentData={{ events: multiSportEventsData.events, numEvents: formData.numEvents, venueType: formData.venueType }} 
                         onDataChange={setMultiSportEventsData} 
                     />
-                ) : (formData.venueType !== 'off' && (
-                    <>
+                ) : (formData.venueType === 'single' && (
                         <div style={inputGroupStyles}>
-                            <label style={labelStyles} htmlFor="venues">Venue Name(s)</label>
-                            {formData.venues.map((venue, index) => (
-                                <div key={index} style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
-                                    <input
-                                        style={inputStyles}
-                                        type="text"
-                                        placeholder="Venue Name"
-                                        value={venue.name}
-                                        onChange={(e) => handleVenueChange(index, 'name', e.target.value)}
-                                        required
-                                    />
-                                    {(formData.venueType === 'multi' || (formData.venueType === 'single' && !formData.venues[index]?.coordinatorId)) ? (
-                                        <input
-                                            style={inputStyles}
-                                            type="text"
-                                            placeholder="Coordinator ID"
-                                            value={venue.coordinatorId}
-                                            onChange={(e) => handleVenueChange(index, 'coordinatorId', e.target.value)}
-                                            required={formData.venueType === 'multi'}
-                                        />
-                                    ) : null}
-                                    <button type="button" onClick={() => removeVenue(index)} style={{ padding: '5px 10px', backgroundColor: '#ff6b6b', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}>Remove Venue</button>
-                                </div>
-                            ))}
-                            <button type="button" onClick={addVenue} style={{ padding: '5px 10px', backgroundColor: '#00ffaa', color: '#1a1a1a', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', marginTop: '10px' }}>Add Venue</button>
+                            <label style={labelStyles} htmlFor="venues">Venue Name</label>
+                            <input
+                                style={inputStyles}
+                                type="text"
+                                placeholder="Venue Name"
+                                value={formData.venues[0]?.name || ''}
+                                onChange={e => handleVenueChange(0, 'name', e.target.value)}
+                                required
+                            />
                         </div>
-                    </>
                 ))}
                 
                 <button type="submit" style={submitButtonStyles} disabled={!!bracketError}>Create Tournament</button>

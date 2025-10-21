@@ -31,16 +31,22 @@ export const calculateLeaderboard = (tournament, matches) => {
             });
 
             matchesInGroup.filter(m => m.status === 'completed' && m.scores && m.teams?.length === 2).forEach(match => {
-                const idA = match.teams[0]?._id.toString();
-                const idB = match.teams[1]?._id.toString();
+                const idA = match.teams[0]?._id?.toString?.() || match.teams[0]?.toString();
+                const idB = match.teams[1]?._id?.toString?.() || match.teams[1]?.toString();
 
                 if (!groupStatsMap.has(idA) || !groupStatsMap.has(idB)) return;
 
                 const statA = groupStatsMap.get(idA);
                 const statB = groupStatsMap.get(idB);
 
-                const scoreA = match.scores.teamA || 0;
-                const scoreB = match.scores.teamB || 0;
+                // Extract scores from array
+                let scoreA = 0, scoreB = 0;
+                if (Array.isArray(match.scores)) {
+                    for (const entry of match.scores) {
+                        if (entry.teamId?.toString() === idA) scoreA = entry.score;
+                        if (entry.teamId?.toString() === idB) scoreB = entry.score;
+                    }
+                }
 
                 statA.p += 1;
                 statB.p += 1;
@@ -100,12 +106,18 @@ export const calculateLeaderboard = (tournament, matches) => {
 
     // 2. Process completed matches
     matches.filter(m => m.status === 'completed' && m.scores && m.teams?.length === 2).forEach(match => {
-        const idA = match.teams[0]?._id;
-        const idB = match.teams[1]?._id;
-        
-        const scoreA = match.scores.teamA || 0;
-        const scoreB = match.scores.teamB || 0;
-        
+        const idA = match.teams[0]?._id?.toString?.() || match.teams[0]?.toString();
+        const idB = match.teams[1]?._id?.toString?.() || match.teams[1]?.toString();
+
+        // Extract scores from array
+        let scoreA = 0, scoreB = 0;
+        if (Array.isArray(match.scores)) {
+            for (const entry of match.scores) {
+                if (entry.teamId?.toString() === idA) scoreA = entry.score;
+                if (entry.teamId?.toString() === idB) scoreB = entry.score;
+            }
+        }
+
         // Ensure both participants are still registered and in our map
         if (!statsMap.has(idA) || !statsMap.has(idB)) return;
 
