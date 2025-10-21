@@ -61,6 +61,9 @@ router.post('/generate/:tournamentId', ...ADMIN_COORDINATOR_MIDDLEWARE, async (r
         const totalParticipants = participants.length;
         const maxParticipants = fullTournament.maxParticipants;
         
+        if (totalParticipants === 0) {
+            return res.status(400).json({ msg: 'Cannot generate schedule. No participants are registered. Please register participants before generating the tournament schedule.' });
+        }
         if (totalParticipants < 2 || totalParticipants !== maxParticipants) {
             return res.status(400).json({ msg: `Cannot generate schedule. Required: ${maxParticipants}, Registered: ${totalParticipants}.` });
         }
@@ -127,7 +130,13 @@ router.post('/generate/:tournamentId', ...ADMIN_COORDINATOR_MIDDLEWARE, async (r
             else if (bracketSize === 32) { roundName = 'Round of 32'; }
             else { roundName = 'Round 1'; }
             
-            const allParticipantIDs = participants.map(p => p._id); // Get all participant IDs
+
+            // Shuffle all participant IDs for random fixtures
+            const allParticipantIDs = participants.map(p => p._id);
+            for (let i = allParticipantIDs.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [allParticipantIDs[i], allParticipantIDs[j]] = [allParticipantIDs[j], allParticipantIDs[i]];
+            }
             const byeParticipants = allParticipantIDs.slice(0, numByes); // Top participants get BYE
             const scheduledParticipants = allParticipantIDs.slice(numByes); // Remaining participants play
 
@@ -351,58 +360,50 @@ router.post('/generate-next-round/:tournamentId', ...ADMIN_COORDINATOR_MIDDLEWAR
         const winners = [];
         
         allLatestRoundMatches.forEach(match => {
-            // Prioritize explicitly selected winner for ties, otherwise use scores
-            const scores = match.scores || [];
-            if(scores[0].score > scores[1].score ){
-                winners.push(match.teams[0]);
-            }     
-            else if(scores[1].score > scores[0].score ){
-                winners.push(match.teams[1]);
-            } 
-            else{
-                console.warn(`WARNING: Tie detected in match ${match._id} without a selected winner. Defaulting to ${match.teams[0]?.name || 'Team A'}.`);
-                winners.push(match.teams[0]);
-            }
+            // Use match.winner if set, otherwise determine by score
+            let winnerId = null;
             if (match.winner) {
-                winners.push(match.winner);
-            } else if (match.scores && match.scores.teamA !== undefined && match.scores.teamB !== undefined) {
-                if (match.scores.teamA > match.scores.teamB) {
-                    winners.push(match.teams[0]);
-                } else if (match.scores.teamB > match.scores.teamA) {
-                    winners.push(match.teams[1]);
+                winnerId = match.winner.toString();
+            } else if (Array.isArray(match.scores) && match.scores.length === 2) {
+                const [scoreA, scoreB] = match.scores;
+                if (scoreA.score > scoreB.score) {
+                    winnerId = scoreA.teamId.toString();
+                } else if (scoreB.score > scoreA.score) {
+                    winnerId = scoreB.teamId.toString();
                 } else {
-                    // Fallback for old tied matches without a selected winner, pick teamA
-                    console.warn(`WARNING: Tie detected in match ${match._id} without a selected winner. Defaulting to ${match.teams[0]?.name || 'Team A'}.`);
-                    winners.push(match.teams[0]);
+                    // Tie: default to first team
+                    console.warn(`WARNING: Tie detected in match ${match._id} without a selected winner. Defaulting to ${scoreA.teamId}`);
+                    winnerId = scoreA.teamId.toString();
                 }
+            }
+            if (winnerId) {
+                winners.push(winnerId);
             }
         });
 
-        if (winners.length === 1) {
+        // Remove duplicate winner IDs (in case of logic error)
+        const uniqueWinners = [...new Set(winners)];
+
+
+        if (uniqueWinners.length === 1) {
             // Tournament is complete
             tournament.status = 'completed';
-            
-            // Ensure winner.name is safely accessed
-            const championName = winners[0]?.name || 'Unknown Champion';
-            tournament.winner = championName;
-
+            tournament.winner = uniqueWinners[0];
             await tournament.save();
-            
             return res.json({ 
                 msg: 'Tournament completed!', 
-                winner: championName,
+                winner: uniqueWinners[0],
                 isComplete: true 
             });
         }
 
-        if (winners.length === 0) {
+        if (uniqueWinners.length === 0) {
             return res.status(400).json({ msg: 'No valid winners found in completed matches.' });
         }
 
         // Determine next round name based on number of winners
         let nextRoundName;
-        const numWinners = winners.length;
-        
+        const numWinners = uniqueWinners.length;
         if (numWinners === 2) {
             nextRoundName = 'Final';
         } else if (numWinners === 4) {
@@ -416,7 +417,6 @@ router.post('/generate-next-round/:tournamentId', ...ADMIN_COORDINATOR_MIDDLEWAR
         } else if (numWinners === 64) {
             nextRoundName = 'Round of 64';
         } else {
-            // For other numbers, use a generic round name
             nextRoundName = `Round ${Math.ceil(Math.log2(numWinners))}`;
         }
 
@@ -424,13 +424,12 @@ router.post('/generate-next-round/:tournamentId', ...ADMIN_COORDINATOR_MIDDLEWAR
         const newMatches = [];
         const baseVenue = tournament.venues[0] || 'TBD Venue';
         const baseDateTime = new Date();
-
-        for (let i = 0; i < winners.length; i += 2) {
-            if (i + 1 < winners.length) {
+        for (let i = 0; i < uniqueWinners.length; i += 2) {
+            if (i + 1 < uniqueWinners.length) {
                 newMatches.push({
                     tournamentId: tournament._id,
                     participantsType: tournament.participantsType,
-                    teams: [winners[i], winners[i + 1]],
+                    teams: [uniqueWinners[i], uniqueWinners[i + 1]],
                     status: 'scheduled',
                     round: nextRoundName,
                     scheduledTime: baseDateTime,
@@ -786,8 +785,8 @@ router.put('/resolve-ties/:tournamentId', ...ADMIN_COORDINATOR_MIDDLEWARE, async
 // @route   PUT /api/matches/:matchId/score
 // @access  Admin/Coordinator
 router.put('/:matchId/score', ...ADMIN_COORDINATOR_MIDDLEWARE, async (req, res) => {
-    // Accepts: { scores: [{ teamId, score }, ...], status, winnerId }
-    const { scores, status, winnerId } = req.body;
+    // Accepts: { scores: [{ teamId, score }, ...], sets, status, winnerId }
+    const { scores, sets, status, winnerId } = req.body;
     
     try {
         const match = await Match.findById(req.params.matchId);
@@ -815,6 +814,10 @@ router.put('/:matchId/score', ...ADMIN_COORDINATOR_MIDDLEWARE, async (req, res) 
             }
         }
         match.scores = scores;
+        // If sets are provided (badminton), persist them
+        if (Array.isArray(sets)) {
+            match.sets = sets;
+        }
 
         // If a winnerId is provided (in case of a tie in knockout), store it
         if (winnerId) {

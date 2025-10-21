@@ -113,11 +113,10 @@ const TournamentViewPage = () => {
                 scoreData,
                 { headers: { 'x-auth-token': token } }
             );
-            
+            console.log('Score update sent:', scoreData);
             showToast("Score saved successfully!", 'success');
-            
             await fetchMatches();
-            
+            console.log('Matches re-fetched after score update.');
         } catch (err) {
             console.error(`Failed to update score: ${err.response?.data?.msg || 'Server Error'}`);
             setError(err.response?.data?.msg || 'Failed to update score.');
@@ -301,7 +300,7 @@ const TournamentViewPage = () => {
     if (error) return <div style={{ ...containerStyles, color: '#ff6b6b' }}>Error: {error}</div>;
     if (!tournamentData) return <div style={{ ...containerStyles, color: '#ff6b6b' }}>Tournament not found.</div>;
 
-    const { name, sport, format, status, maxParticipants } = tournamentData;
+    const { name, sport, format, status, maxParticipants, venueType, venues } = tournamentData;
     const isScheduleGenerated = matches.length > 0; 
     
     const displayStatus = status.toLowerCase() === 'ongoing' ? 'Active' : status;
@@ -314,14 +313,22 @@ const TournamentViewPage = () => {
         (isSingleElimination && isFinalRoundComplete() && !isCompleted)
     );
 
+    // --- VENUE DISPLAY LOGIC ---
+    let venueDisplay = null;
+    if (venueType === 'single' && venues && venues.length > 0 && venues[0].name) {
+        venueDisplay = venues[0].name;
+    } else if (venueType === 'multi' && venues && venues.length > 0) {
+        venueDisplay = venues.map(v => v.name).filter(Boolean).join(', ');
+    }
+
     const renderFixtureView = () => {
         if (!isScheduleGenerated) {
             return <p>No matches scheduled yet. Use the 'Generate Schedule' button above to start.</p>;
         }
-        
+
         // renderProps passes down all necessary state and handlers
         const renderProps = { matches, fetchMatches, token, isTournamentCompleted: isCompleted, onScoreUpdate: handleScoreUpdate, hasAdminRights: hasAdminRights && !isCompleted, tournamentData: tournamentData };
-        
+
         // Conditionally render scorecard based on tournament sport
         switch (tournamentData.sport.toLowerCase()) {
             case 'football':
@@ -410,12 +417,57 @@ const TournamentViewPage = () => {
         }
     };
 
+    // --- Logout handler ---
+    const handleLogout = () => {
+        localStorage.clear();
+        navigate('/');
+    };
+
     return (
         <div style={containerStyles}>
-            <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', marginBottom: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                 <button style={backButtonStyles} onClick={() => navigate(-1)}>
                     ← Back
                 </button>
+                <div style={{ display: 'flex', alignItems: 'center', marginLeft: 'auto', gap: 16 }}>
+                    {venueDisplay && (
+                        <div style={{
+                            background: 'linear-gradient(90deg, #00ffaa 0%, #39ff14 100%)',
+                            color: '#1a1a1a',
+                            fontWeight: 700,
+                            fontSize: '1.1em',
+                            borderRadius: '8px',
+                            padding: '8px 22px',
+                            boxShadow: '0 2px 12px 0 rgba(0,255,170,0.10)',
+                            letterSpacing: '0.5px',
+                            border: '2px solid #00ffaa',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            minWidth: '120px',
+                            justifyContent: 'center',
+                            textShadow: '0 1px 8px #00ffaa44'
+                        }}>
+                            <span role="img" aria-label="venue">📍</span> {venueDisplay}
+                        </div>
+                    )}
+                    <button
+                        onClick={handleLogout}
+                        style={{
+                            background: '#00ffaa',
+                            color: '#1a1a1a',
+                            fontWeight: 700,
+                            fontSize: '1em',
+                            borderRadius: '8px',
+                            padding: '8px 22px',
+                            border: '2px solid #00ffaa',
+                            cursor: 'pointer',
+                            marginLeft: venueDisplay ? 16 : 0
+                        }}
+                    >
+                        Logout
+                    </button>
+                </div>
             </div>
             <h1 style={headerStyles}>
                 {name.toUpperCase()} ({sport.toUpperCase()})
@@ -424,20 +476,31 @@ const TournamentViewPage = () => {
             {/* Champion Display for Completed Tournaments */}
             {isCompleted && tournamentData.winner && (
                 <div style={{
-                    backgroundColor: '#1a1a1a',
-                    border: '2px solid #00ffaa',
-                    borderRadius: '10px',
-                    padding: '20px',
-                    marginBottom: '20px',
-                    textAlign: 'center'
+                    background: 'linear-gradient(90deg, #00ffaa 0%, #39ff14 100%)',
+                    border: '2.5px solid #00ffaa',
+                    borderRadius: '16px',
+                    padding: '32px 24px',
+                    marginBottom: '28px',
+                    textAlign: 'center',
+                    boxShadow: '0 4px 32px 0 rgba(0,255,170,0.10)',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    animation: 'championFadeIn 1.2s cubic-bezier(0.23, 1, 0.32, 1)'
                 }}>
-                    <div style={{ fontSize: '2em', marginBottom: '10px' }}>🏆</div>
-                    <h2 style={{ color: '#00ffaa', margin: '0 0 10px 0' }}>
+                    <div style={{ fontSize: '2.8em', marginBottom: '12px', color: '#FFD700', textShadow: '0 0 18px #FFD70099' }}>🏆</div>
+                    <h2 style={{ color: '#1a1a1a', margin: '0 0 12px 0', fontWeight: 900, fontSize: '2.1em', letterSpacing: '1px', textShadow: '0 2px 8px #00ffaa44' }}>
                         Tournament Complete!
                     </h2>
-                    <p style={{ color: '#e0e0e0', fontSize: '1.2em', margin: 0 }}>
-                        <strong>{tournamentData.winner}</strong> is the Champion! 🏆
+                    <p style={{ color: '#222', fontSize: '1.5em', margin: 0, fontWeight: 700, letterSpacing: '0.5px' }}>
+                        <span style={{ color: '#007b55', fontWeight: 900, fontSize: '1.2em', textShadow: '0 0 8px #00ffaa55' }}>{tournamentData.winner}</span> is the Champion! <span style={{fontSize: '1.2em'}}>🏆</span>
                     </p>
+                    <style>{`
+                        @keyframes championFadeIn {
+                            0% { opacity: 0; transform: translateY(-30px) scale(0.95); }
+                            60% { opacity: 1; transform: translateY(8px) scale(1.04); }
+                            100% { opacity: 1; transform: translateY(0) scale(1); }
+                        }
+                    `}</style>
                 </div>
             )}
             
@@ -460,11 +523,11 @@ const TournamentViewPage = () => {
                         <button 
                             style={{
                                 ...generateButtonStyles,
-                                backgroundColor: canGenerateNextRound() ? '#00ffaa' : '#666',
-                                cursor: canGenerateNextRound() ? 'pointer' : 'not-allowed'
+                                backgroundColor: canGenerateNextRound() && !isFinalRoundComplete() ? '#00ffaa' : '#666',
+                                cursor: canGenerateNextRound() && !isFinalRoundComplete() ? 'pointer' : 'not-allowed'
                             }} 
                             onClick={checkAndGenerateNextRound}
-                            disabled={!canGenerateNextRound()}
+                            disabled={!canGenerateNextRound() || isFinalRoundComplete()}
                         >
                             Generate Next Round
                         </button>

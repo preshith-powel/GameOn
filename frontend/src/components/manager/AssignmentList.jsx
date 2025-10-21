@@ -55,7 +55,7 @@ const AssignmentList = ({ assignments, setView, setActiveTeam }) => {
             ) : (
                 flattenedAssignments.map(assignment => (
                     <div key={`${assignment.teamId}-${assignment.tournamentName}`} style={assignmentCardStyles}>
-                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', flex: 1, position: 'relative' }}>
                             <div>
                                 <strong>Tournament: {assignment.tournamentName}</strong> 
                                 <span style={{ marginLeft: '10px', fontSize: '0.9em', color: '#a0a0a0' }}>
@@ -65,25 +65,38 @@ const AssignmentList = ({ assignments, setView, setActiveTeam }) => {
                                     Status: {assignment.tournamentStatus}
                                 </p>
                             </div>
-                            
-                            {/* TEAM READY MESSAGE */}
+                            {/* TEAM READY MESSAGE CENTERED */}
                             {assignment.isReady && (
-                                <span style={readyMessageStyles}>
+                                <span style={{
+                                    ...readyMessageStyles,
+                                    position: 'absolute',
+                                    left: '50%',
+                                    transform: 'translateX(-50%)',
+                                    zIndex: 1
+                                }}>
                                     TEAM READY FOR TOURNAMENT!
                                 </span>
                             )}
                         </div>
-                        
-                        {/* MANAGE BUTTON */}
-                        <button 
-                            style={{...buttonStyles, width: 'auto'}}
-                            onClick={() => {
-                                setActiveTeam({ ...assignment.fullTeamObject, sport: assignment.tournamentId?.sport }); 
-                                setView('roster-management'); 
-                            }}
-                        >
-                            Manage Roster
-                        </button>
+                        <div style={{ display: 'flex', alignItems: 'center', marginLeft: 'auto', gap: 12 }}>
+                            <button 
+                                style={{...buttonStyles, width: 'auto'}}
+                                onClick={() => {
+                                    setActiveTeam({ ...assignment.fullTeamObject, sport: assignment.tournamentId?.sport }); 
+                                    setView('roster-management'); 
+                                }}
+                            >
+                                Manage Roster
+                            </button>
+                            <a
+                                href={`/tournament/${assignment.tournamentId}`}
+                                style={{...buttonStyles, width: 'auto', backgroundColor: '#222', color: '#00ffaa', border: '1px solid #00ffaa', textDecoration: 'none'}}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                View Tournament
+                            </a>
+                        </div>
                     </div>
                 ))
             )}

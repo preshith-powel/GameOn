@@ -8,6 +8,7 @@ import CreateTournamentForm from '../components/admin/CreateTournamentForm';
 import ManageParticipantsForm from '../components/admin/ManageParticipantsForm';
 import TournamentList from '../components/admin/TournamentList';
 import ManageCoordinators from '../components/admin/ManageCoordinators';
+import ManagerList from '../components/admin/ManagerList';
 import MultiSportSetup from '../components/admin/MultiSportSetup';
 // ------------------------------------
 
@@ -57,6 +58,8 @@ const AdminDashboard = () => {
                 return <CreateTournamentForm setView={setCurrentView} token={token} />;
             case 'view':
                 return <TournamentList setView={setCurrentView} setSelectedTournament={setSelectedTournament} token={token} />; 
+            case 'view-managers':
+                return <ManagerList />;
             case 'manage-participants': 
                 // CRITICAL CHECK: Ensure we have a tournament before rendering management
                 if (!selectedTournament) {
@@ -101,6 +104,7 @@ const AdminDashboard = () => {
                     <div style={buttonGroupStyles}>
                         <button style={buttonStyles} onClick={() => setCurrentView('create-tournament')}>Create New Tournament</button>
                         <button style={buttonStyles} onClick={() => setCurrentView('view')}>View All Tournaments</button>
+                        <button style={buttonStyles} onClick={() => setCurrentView('view-managers')}>View All Manager Assignments</button>
                         {/* <button style={buttonStyles} onClick={() => setCurrentView('coordinators')}>Manage Coordinators</button> */}
                     </div>
                 </>

@@ -8,6 +8,10 @@
  * @returns {array|object} Sorted array of participant statistics (for round robin/single elimination) or an object of leaderboards keyed by group name (for group stage).
  */
 export const calculateLeaderboard = (tournament, matches) => {
+    // Kabaddi and Badminton custom points logic
+    const sport = tournament.sport && tournament.sport.toLowerCase();
+    const isKabaddi = sport === 'kabaddi';
+    const isBadminton = sport === 'badminton';
     // Handle Group Stage separately
     if (tournament.format === 'group stage') {
         const groupLeaderboards = {};
@@ -55,18 +59,76 @@ export const calculateLeaderboard = (tournament, matches) => {
                 statB.goalsScored += scoreB;
                 statB.goalsConceded += scoreA;
 
-                if (scoreA > scoreB) {
-                    statA.w += 1;
-                    statB.l += 1;
-                    statA.pts += 3;
-                } else if (scoreB > scoreA) {
-                    statB.w += 1;
-                    statA.l += 1;
-                    statB.pts += 3;
+                if (isKabaddi) {
+                // Badminton: Win=2, Draw=1, Loss=0
+                } else if (isBadminton) {
+                    if (scoreA > scoreB) {
+                        statA.w += 1;
+                        statB.l += 1;
+                        statA.pts += 2;
+                    } else if (scoreB > scoreA) {
+                        statB.w += 1;
+                        statA.l += 1;
+                        statB.pts += 2;
+                    } else {
+                        // Draw (including 0-0)
+                        statA.d += 1;
+                        statB.d += 1;
+                        statA.pts += 1;
+                        statB.pts += 1;
+                    }
+        // Badminton: Win=2, Draw=1, Loss=0
+        } else if (isBadminton) {
+            if (scoreA > scoreB) {
+                statA.w += 1;
+                statB.l += 1;
+                statA.pts += 2;
+            } else if (scoreB > scoreA) {
+                statB.w += 1;
+                statA.l += 1;
+                statB.pts += 2;
+            } else {
+                // Draw (including 0-0)
+                statA.d += 1;
+                statB.d += 1;
+                statA.pts += 1;
+                statB.pts += 1;
+            }
+                    // Kabaddi: Win=5, Loss=1, Tie=1 for both
+                    if (scoreA > scoreB) {
+                        statA.w += 1;
+                        statB.l += 1;
+                        statA.pts += 5;
+                        statB.pts += 1;
+                    } else if (scoreB > scoreA) {
+                        statB.w += 1;
+                        statA.l += 1;
+                        statB.pts += 5;
+                        statA.pts += 1;
+                    } else {
+                        // Tie
+                        statA.d += 1;
+                        statB.d += 1;
+                        statA.pts += 1;
+                        statB.pts += 1;
+                    }
                 } else {
-                    statA.d += 1;
-                    statB.d += 1;
-                    statA.pts += 1;
+                    // Default: Win=3, Draw=1, Loss=0
+                    if (scoreA > scoreB) {
+                        statA.w += 1;
+                        statB.l += 1;
+                        statA.pts += 3;
+                    } else if (scoreB > scoreA) {
+                        statB.w += 1;
+                        statA.l += 1;
+                        statB.pts += 3;
+                    } else {
+                        // Draw (including 0-0)
+                        statA.d += 1;
+                        statB.d += 1;
+                        statA.pts += 1;
+                        statB.pts += 1;
+                    }
                 }
             });
 
@@ -132,19 +194,59 @@ export const calculateLeaderboard = (tournament, matches) => {
         statB.goalsScored += scoreB;
         statB.goalsConceded += scoreA;
 
-        // Determine result and points
-        if (scoreA > scoreB) {
-            statA.w += 1;
-            statB.l += 1;
-            statA.pts += 3;
-        } else if (scoreB > scoreA) {
-            statB.w += 1;
-            statA.l += 1;
-            statB.pts += 3;
+        if (isKabaddi) {
+            // Kabaddi: Win=5, Loss=1, Tie=1 for both
+            if (scoreA > scoreB) {
+                statA.w += 1;
+                statB.l += 1;
+                statA.pts += 5;
+                statB.pts += 1;
+            } else if (scoreB > scoreA) {
+                statB.w += 1;
+                statA.l += 1;
+                statB.pts += 5;
+                statA.pts += 1;
+            } else {
+                // Tie
+                statA.d += 1;
+                statB.d += 1;
+                statA.pts += 1;
+                statB.pts += 1;
+            }
+        } else if (isBadminton) {
+            // Badminton: Win=2, Draw=1, Loss=0
+            if (scoreA > scoreB) {
+                statA.w += 1;
+                statB.l += 1;
+                statA.pts += 2;
+            } else if (scoreB > scoreA) {
+                statB.w += 1;
+                statA.l += 1;
+                statB.pts += 2;
+            } else {
+                // Draw (including 0-0)
+                statA.d += 1;
+                statB.d += 1;
+                statA.pts += 1;
+                statB.pts += 1;
+            }
         } else {
-            statA.d += 1;
-            statB.d += 1;
-            statA.pts += 1;
+            // Default: Win=3, Draw=1, Loss=0
+            if (scoreA > scoreB) {
+                statA.w += 1;
+                statB.l += 1;
+                statA.pts += 3;
+            } else if (scoreB > scoreA) {
+                statB.w += 1;
+                statA.l += 1;
+                statB.pts += 3;
+            } else {
+                // Draw (including 0-0)
+                statA.d += 1;
+                statB.d += 1;
+                statA.pts += 1;
+                statB.pts += 1;
+            }
         }
     });
 

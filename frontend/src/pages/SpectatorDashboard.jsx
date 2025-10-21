@@ -6,9 +6,24 @@ const containerStyles = {
     fontFamily: 'Arial, sans-serif',
     color: '#e0e0e0',
     backgroundColor: '#1a1a1a',
+    backgroundImage: "url('/spec.jpg')",
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    backgroundRepeat: 'no-repeat',
     minHeight: '100vh',
     padding: '0',
     boxSizing: 'border-box',
+    position: 'relative',
+};
+
+const overlayStyles = {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    width: '100vw',
+    height: '100vh',
+    background: 'rgba(20, 20, 20, 0.7)',
+    zIndex: 0,
 };
 
 const headerStyles = {
@@ -43,20 +58,28 @@ const selectStyles = {
 
 const tournamentListStyles = {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-    gap: '20px',
-    padding: '0 20px',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+    gap: '24px',
+    padding: '0 10px',
+    zIndex: 1,
 };
 
 const tournamentCardStyles = {
-    backgroundColor: '#2a2a2a',
-    padding: '20px',
-    borderRadius: '8px',
-    boxShadow: '0 4px 8px rgba(0, 0, 0, 0.3)',
+    background: 'rgba(34, 34, 34, 0.85)',
+    padding: '22px',
+    borderRadius: '14px',
+    boxShadow: '0 6px 18px rgba(0,0,0,0.35)',
     display: 'flex',
     flexDirection: 'column',
     justifyContent: 'space-between',
-    border: '1px solid #333',
+    border: '1.5px solid #222',
+    transition: 'transform 0.18s, box-shadow 0.18s',
+    cursor: 'pointer',
+};
+
+const tournamentCardHoverStyles = {
+    transform: 'translateY(-6px) scale(1.03)',
+    boxShadow: '0 12px 32px rgba(0,0,0,0.45)',
 };
 
 const cardTitleStyles = {
@@ -88,6 +111,7 @@ const SpectatorDashboard = () => {
     const [error, setError] = useState(null);
     const navigate = useNavigate();
     const [selectedStatus, setSelectedStatus] = useState('all');
+    const [hoveredCard, setHoveredCard] = useState(null);
 
     const spectatorUsername = localStorage.getItem('username');
 
@@ -147,19 +171,28 @@ const SpectatorDashboard = () => {
 
     return (
         <div style={containerStyles}>
-            <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '20px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '30px' }}>
-                    <button 
-                        onClick={() => navigate('/')}
-                        style={backButtonStyles}
-                    >← Back to Login</button>
-                    <h1 style={{ ...welcomeMessageStyles, flex: 1, textAlign: 'center' }}>
-                        Welcome, 
-                        <span style={usernameHighlightStyles}>
-                            {spectatorUsername ? spectatorUsername : 'Guest'}
-                        </span>
-                    </h1>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={overlayStyles}></div>
+            <div style={{ maxWidth: '1800px', width: '96vw', margin: '0 auto', padding: '32px 0 32px 0', position: 'relative', zIndex: 1 }}>
+                {/* Header Row: Back button left, Welcome center, Filters right */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '30px', width: '100%' }}>
+                    {/* Back Button Left */}
+                    <div style={{ flex: '0 0 auto' }}>
+                        <button 
+                            onClick={() => navigate('/')}
+                            style={backButtonStyles}
+                        >← Back to Login</button>
+                    </div>
+                    {/* Welcome Center */}
+                    <div style={{ flex: '1 1 0', display: 'flex', justifyContent: 'center' }}>
+                        <h1 style={{ ...welcomeMessageStyles, margin: 0, textAlign: 'center' }}>
+                            Welcome, 
+                            <span style={usernameHighlightStyles}>
+                                {spectatorUsername ? spectatorUsername : 'Guest'}
+                            </span>
+                        </h1>
+                    </div>
+                    {/* Filters Right */}
+                    <div style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: '16px' }}>
                         <select style={selectStyles} onChange={handleSportChange} value={selectedSport}>
                             <option value="all">All Sports</option>
                             {allSports.map(sport => (
@@ -177,16 +210,21 @@ const SpectatorDashboard = () => {
                     </div>
                 </div>
 
-                <div style={{ borderBottom: '2px solid #333', paddingBottom: '10px', marginBottom: '20px' }}>
-                    <h2 style={{ color: '#00ffaa', textAlign: 'center' }}>Public Tournaments ({selectedSport !== 'all' ? selectedSport.charAt(0).toUpperCase() + selectedSport.slice(1) : 'All'} / {selectedStatus !== 'all' ? selectedStatus.charAt(0).toUpperCase() + selectedStatus.slice(1) : 'All'})</h2>
+                <div style={{ borderBottom: '2px solid #333', paddingBottom: '10px', marginBottom: '20px', width: '100%' }}>
+                    <h2 style={{ color: '#00ffaa', textAlign: 'center' }}>Total Tournaments: {tournaments.length}</h2>
                 </div>
 
                 {tournaments.length === 0 ? (
                     <p style={noTournamentsStyles}>No tournaments to display {selectedSport !== 'all' ? ` for ${selectedSport}` : ''}{selectedStatus !== 'all' ? ` with status ${selectedStatus}.` : '.'}</p>
                 ) : (
                     <div style={tournamentListStyles}>
-                        {tournaments.map(tournament => (
-                            <div key={tournament._id} style={tournamentCardStyles}>
+                        {tournaments.map((tournament, idx) => (
+                            <div
+                                key={tournament._id}
+                                style={hoveredCard === idx ? { ...tournamentCardStyles, ...tournamentCardHoverStyles } : tournamentCardStyles}
+                                onMouseEnter={() => setHoveredCard(idx)}
+                                onMouseLeave={() => setHoveredCard(null)}
+                            >
                                 <div>
                                     <h3 style={cardTitleStyles}>{tournament.name}</h3>
                                     <p style={cardDetailStyles}>Sport: {tournament.sport}</p>

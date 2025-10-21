@@ -133,6 +133,7 @@ router.post('/:tournamentId/register-slots-dynamic', ...ADMIN_MIDDLEWARE, async 
 
     try {
         const tournament = await Tournament.findById(tournamentId);
+        console.log('[DEBUG] Registering participants for tournament:', tournamentId, 'Name:', tournament?.name);
 
         if (!tournament || tournament.adminId.toString() !== req.user.id) {
             return res.status(404).json({ msg: 'Tournament not found or unauthorized.' });
@@ -218,6 +219,9 @@ router.post('/:tournamentId/register-slots-dynamic', ...ADMIN_MIDDLEWARE, async 
                 if (!team.tournaments.some(t => t.tournamentId.equals(tournament._id))) {
                     team.tournaments.push({ tournamentId: tournament._id });
                     await team.save();
+                    console.log(`[DEBUG] Linked team '${team.name}' (ID: ${team._id}) to tournament '${tournament.name}' (ID: ${tournament._id}), manager: ${managerUser.uniqueId}`);
+                } else {
+                    console.log(`[DEBUG] Team '${team.name}' (ID: ${team._id}) already linked to tournament '${tournament.name}' (ID: ${tournament._id}), manager: ${managerUser.uniqueId}`);
                 }
 
                 participantsToSave.push(team._id);

@@ -39,6 +39,9 @@
 
 .container {
   background-color: #0a0a0a;
+  background-image: url('/ea-sports-fc-26-football-stadium-4k-wallpaper-uhdpaper.com-145@5@i.jpg');
+  background-size: cover;
+  background-position: center;
   color: #e0e0e0;
   display: flex;
   justify-content: center;

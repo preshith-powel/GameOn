@@ -223,7 +223,6 @@ const LoginPage = () => {
                                     onChange={(e) => setRegRole(e.target.value)}
                                 >
                                     <option value="admin">Admin</option>
-                                    <option value="coordinator">Coordinator</option>
                                     <option value="manager">Manager</option>
                                     <option value="spectator">Spectator</option>
                                 </select>

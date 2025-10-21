@@ -128,7 +128,6 @@ const FootballScorecard = ({ match, onScoreUpdate, isTournamentCompleted, hasAdm
       ))}
 
       {isTournamentCompleted && <p style={{ color: '#ff6b6b', textAlign: 'center', fontWeight: 'bold', marginTop: '15px' }}>Tournament Completed - Scoring Disabled</p>}
-
     </div>
   );
 };

@@ -10,16 +10,30 @@ const BadmintonScorecard = ({ match, onScoreUpdate, isTournamentCompleted, hasAd
     ? match.sets
     : [{ setNumber: 1, teamAScore: 0, teamBScore: 0 }];
   const [sets, setSets] = useState(initialSets);
+  const [lockedSets, setLockedSets] = useState(Array(initialSets.length).fill(false));
 
   // Add a new set (admin only, up to 3)
+
+  // Helper: Check if a player has already won 2 sets
+  const hasEarlyWinner = () => {
+    let teamAWins = 0, teamBWins = 0;
+    sets.forEach(set => {
+      if (set.teamAScore > set.teamBScore) teamAWins++;
+      else if (set.teamBScore > set.teamAScore) teamBWins++;
+    });
+    return teamAWins === 2 || teamBWins === 2;
+  };
+
   const handleAddSet = () => {
-    if (sets.length < MAX_SETS) {
+    if (sets.length < MAX_SETS && !hasEarlyWinner()) {
       setSets([...sets, { setNumber: sets.length + 1, teamAScore: 0, teamBScore: 0 }]);
+      setLockedSets(prev => [...prev, false]);
     }
   };
 
   // Handle score change for a set
   const handleScoreChange = (setIdx, team, value) => {
+    if (lockedSets[setIdx]) return; // Prevent editing locked sets
     const newSets = sets.map((s, idx) =>
       idx === setIdx ? { ...s, [team]: Number(value) } : s
     );
@@ -108,15 +122,46 @@ const BadmintonScorecard = ({ match, onScoreUpdate, isTournamentCompleted, hasAd
                 style={{ background: '#39ff14', color: '#222', border: 'none', borderRadius: 4, width: 24, height: 24, fontWeight: 'bold', cursor: 'pointer', marginLeft: 2 }}
               >+</button>
             </div>
-            {hasAdminRights && !isTournamentCompleted && sets.length < MAX_SETS && idx === sets.length - 1 && (
+            {hasAdminRights && !isTournamentCompleted && sets.length < MAX_SETS && idx === sets.length - 1 && !hasEarlyWinner() && (
               <button onClick={handleAddSet} style={{ marginLeft: 16, background: '#39ff14', color: '#222', border: 'none', borderRadius: 4, padding: '4px 12px', fontWeight: 'bold', cursor: 'pointer' }}>Add Set</button>
+            )}
+
+            {hasAdminRights && !isTournamentCompleted && (
+              lockedSets[idx] ? (
+                <button
+                  onClick={() => {
+                    // Unlock for editing
+                    setLockedSets(prev => prev.map((locked, i) => i === idx ? false : locked));
+                  }}
+                  style={{ marginLeft: 16, background: '#ff6b6b', color: '#222', border: 'none', borderRadius: 4, padding: '4px 12px', fontWeight: 'bold', cursor: 'pointer' }}
+                >Edit</button>
+              ) : (
+                <button
+                  onClick={() => {
+                    // Lock the set and save
+                    setLockedSets(prev => prev.map((locked, i) => i === idx ? true : locked));
+                    // Save only the current set
+                    const updatedSets = sets.map((s, sidx) => sidx === idx ? s : s);
+                    // Recalculate sets won
+                    let teamAWins = 0, teamBWins = 0;
+                    updatedSets.forEach(set => {
+                      if (set.teamAScore > set.teamBScore) teamAWins++;
+                      else if (set.teamBScore > set.teamAScore) teamBWins++;
+                    });
+                    const scores = [
+                      { teamId: match.teams[0]?._id || match.teams[0], score: teamAWins },
+                      { teamId: match.teams[1]?._id || match.teams[1], score: teamBWins }
+                    ];
+                    if (onScoreUpdate) onScoreUpdate(match._id, { sets: updatedSets, scores });
+                  }}
+                  style={{ marginLeft: 16, background: '#00ffaa', color: '#222', border: 'none', borderRadius: 4, padding: '4px 12px', fontWeight: 'bold', cursor: 'pointer' }}
+                >Save Score</button>
+              )
             )}
           </div>
         </div>
       ))}
-      {hasAdminRights && !isTournamentCompleted && sets.length === MAX_SETS && (
-        <button onClick={handleSaveAll} style={updateButtonStyles}>Save All Sets</button>
-      )}
+      {/* Save All Sets button removed as per user request */}
       {isTournamentCompleted && <p style={{ color: '#ff6b6b', marginTop: 10 }}>Tournament Completed - Scoring Disabled</p>}
     </div>
   );

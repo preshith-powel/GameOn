@@ -54,8 +54,22 @@ const CreateTournamentForm = ({ setView, token }) => {
         : '';
 
     const handleChange = (e) => {
+
         const { name, value, type, checked } = e.target;
         let newValue = type === 'checkbox' ? checked : value;
+
+        // Fix: When venueType is set to 'single', ensure venues array has one object
+        if (name === 'venueType') {
+            let newFormData = { ...formData, venueType: newValue };
+            if (newValue === 'single' && (!formData.venues || formData.venues.length === 0)) {
+                newFormData.venues = [{ name: '', coordinatorId: '' }];
+            } else if (newValue !== 'single') {
+                newFormData.venues = [];
+            }
+            setFormData(prev => newFormData);
+            setError('');
+            return;
+        }
 
         if (name === 'sport') {
             let newFormData = { ...formData, sport: newValue };
@@ -68,6 +82,9 @@ const CreateTournamentForm = ({ setView, token }) => {
                 // If changing from multi-sport to another sport, reset format
                 newFormData.format = 'single elimination'; // Default back to single elimination
                 // Keep other fields as they were or reset as needed
+            } else if (newValue === 'hockey') {
+                newFormData.participantsType = 'Team';
+                newFormData.playersPerTeam = 11; // Hockey always 11 players per team
             } else if (newValue === 'volleyball') {
                 newFormData.participantsType = 'Team';
                 newFormData.playersPerTeam = 0; // Dynamic, to be set by user
@@ -192,18 +209,30 @@ const CreateTournamentForm = ({ setView, token }) => {
     if (formData.participantsType === 'Team' && formData.sport !== 'multi-sport' && (!formData.playersPerTeam || formData.playersPerTeam < 1)) { setError('Please specify the number of players per team.'); return; }
         if (formData.maxParticipants < 2) { setError('Minimum 2 participants (teams or players) required.'); return; }
 
+        // Clean venues: remove coordinatorId if blank/empty string
+        let cleanedVenues = [];
+        if (formData.sport === 'multi-sport' && formData.venueType === 'multi') {
+            cleanedVenues = multiSportEventsData.events.map(event => {
+                const v = { name: event.eventVenue };
+                if (event.coordinatorId && event.coordinatorId !== '') v.coordinatorId = event.coordinatorId;
+                return v;
+            });
+        } else if (formData.venueType === 'off') {
+            cleanedVenues = [];
+        } else {
+            cleanedVenues = (formData.venues || []).map(v => {
+                const venueObj = { name: v.name };
+                if (v.coordinatorId && v.coordinatorId !== '') venueObj.coordinatorId = v.coordinatorId;
+                return venueObj;
+            });
+        }
+
         const dataToSubmit = {
             ...formData,
-            // startDate: formData.startDate,
-            // endDate: formData.endDate,
             maxParticipants: formData.format === 'group stage' ? (formData.numGroups * formData.teamsPerGroup) : formData.maxParticipants,
             playersPerTeam: formData.participantsType === 'Team' ? formData.playersPerTeam : undefined,
             numEvents: formData.sport === 'multi-sport' ? multiSportEventsData.numEvents : undefined,
-            // If multi-sport and multi venue, venues are derived from events. Otherwise, use formData.venues.
-            venues: (formData.sport === 'multi-sport' && formData.venueType === 'multi') 
-                        ? multiSportEventsData.events.map(event => ({ name: event.eventVenue, coordinatorId: event.coordinatorId }))
-                        : (formData.venueType === 'off' ? [] : formData.venues),
-            // For multi-sport, send the event details
+            venues: cleanedVenues,
             events: formData.sport === 'multi-sport' ? multiSportEventsData.events : undefined,
         };
 
@@ -236,7 +265,7 @@ const CreateTournamentForm = ({ setView, token }) => {
                     <div style={{...inputGroupStyles, flex: 1}}>
                         <label style={labelStyles} htmlFor="sport">Sport Type</label>
                         <select style={selectStyles} id="sport" name="sport" value={formData.sport} onChange={handleChange} required>
-                            {['football', 'badminton', 'volleyball', 'kabaddi', 'multi-sport', 'chess', 'hockey', 'carroms'].map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+                            {['football', 'badminton', 'volleyball', 'kabaddi', 'chess', 'hockey', 'carroms'].map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
                         </select>
                     </div>
                     <div style={{...inputGroupStyles, flex: 1}}>
